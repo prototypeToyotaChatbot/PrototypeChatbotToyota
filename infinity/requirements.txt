@@ -1,0 +1,14 @@
+python-dotenv
+fastapi
+mcp==1.7.0
+fastapi-mcp
+uvicorn
+sqlalchemy
+psycopg2-binary
+pydantic
+python-dotenv
+requests
+httpx
+pytz
+passlib[bcrypt]
+python-jose[cryptography]

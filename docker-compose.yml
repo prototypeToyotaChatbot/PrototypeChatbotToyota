@@ -1,170 +1,533 @@
-version: "3.9"
+volumes:
+  n8n_storage:
+  #postgres_storage:
+  ollama_storage:
+  qdrant_storage:
+  pgvector_storage:
+
+networks:
+  demo:
+    driver: bridge
+  my_shared_network:
+    driver: bridge
+    name: infinitycafe_shared_network  # Nama yang lebih deskriptif
+    # Hapus external: true
+
+x-n8n: &service-n8n
+  image: n8nio/n8n:1.93.0
+  networks: ['demo']
+  environment:
+    - DB_TYPE=postgresdb
+    - DB_POSTGRESDB_HOST=pgvector
+    - DB_POSTGRESDB_USER=${POSTGRES_USER}
+    - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+    - N8N_PROTOCOL=https
+    - NODE_ENV=production
+   # - WEBHOOK_URL=https://liberal-relative-panther.ngrok-free.app
+    - WEBHOOK_URL=https://${NG_URL}
+    - GENERIC_TIMEZONE=Asia/Jakarta
+    - N8N_DIAGNOSTICS_ENABLED=false
+    - N8N_PERSONALIZATION_ENABLED=false
+    - N8N_ENCRYPTION_KEY
+    - N8N_USER_MANAGEMENT_JWT_SECRET
+    - OLLAMA_HOST=host.docker.internal:11434
+  env_file:
+    - .env
+
+x-ollama: &service-ollama
+  image: ollama/ollama:latest
+  container_name: ollama
+  networks: ['demo']
+  restart: unless-stopped
+  ports:
+    - 11434:11434
+  volumes:
+    - ollama_storage:/root/.ollama
+    - ./modelfile:/modelfile:ro  # Added shared modelfile directory as read-only
+
+x-init-ollama: &init-ollama
+  image: ollama/ollama:latest
+  networks: ['demo']
+  container_name: ollama-pull-llama
+  volumes:
+    - ./modelfile/cafe.modelfile:/cafe.modelfile   # dari folder `modelfile`
+    - ollama_storage:/root/.ollama
+    - ./modelfile:/modelfile
+  entrypoint: /bin/sh
+  environment:
+    - OLLAMA_HOST=host.docker.internal:11434
+  command:
+    - "-c"
+    - "sleep 3; ollama pull nomic-embed-text"
 
 services:
-  pgvector:
-    image: pgvector/pgvector:pg17
-    container_name: pgvector
-    hostname: pgvector
-    restart: unless-stopped
-    env_file:
-      - ./.env
-    ports:
-      - "5555:5432"
+  n8n-import:
+    <<: *service-n8n
+    hostname: n8n-import
+    container_name: n8n-import
+    entrypoint: /bin/sh
+    command:
+      - "-c"
+      - "n8n import:credentials --separate --input=/demo-data/credentials && n8n import:workflow --separate --input=/demo-data/workflows"
     volumes:
-      - pgvector_storage:/var/lib/postgresql/data
-    networks:
-      - chatbot_network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  initdb:
-    image: pgvector/pgvector:pg17
-    container_name: initdb
+      - ./n8n/demo-data:/demo-data
     depends_on:
-      pgvector:
+      pgvector17:
         condition: service_healthy
-    restart: "no"
-    env_file:
-      - ./.env
-    volumes:
-      - ./database/init:/scripts:ro
-    entrypoint: ["/bin/bash", "-c"]
-    command: >-
-      psql -v ON_ERROR_STOP=1 \
-           -v CHATBOT_DB="$CHATBOT_DB" \
-           -v USER_DB="$USER_DB" \
-           -v N8N_DB="$N8N_DB" \
-           -h pgvector -U "$POSTGRES_USER" -d postgres -f /scripts/create_databases.sql
-    networks:
-      - chatbot_network
 
   n8n:
-    image: n8nio/n8n:latest
+    <<: *service-n8n
+    hostname: n8n
+    container_name: n8n
     restart: unless-stopped
-    env_file:
-      - ./.env
-    environment:
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=pgvector
-      - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_DATABASE=${N8N_DB:-n8n_db}
-      - DB_POSTGRESDB_USER=${POSTGRES_USER}
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
-      - GENERIC_TIMEZONE=${N8N_TIMEZONE:-Asia/Jakarta}
-      - N8N_EDITOR_BASE_URL=${N8N_EDITOR_BASE_URL:-http://localhost:5678}
-      - N8N_HOST=${N8N_HOST:-n8n.local}
     ports:
-      - "5678:5678"
+      - 5678:5678
     volumes:
       - n8n_storage:/home/node/.n8n
+      - ./n8n/demo-data:/demo-data
+      - ./shared:/data/shared
     depends_on:
-      pgvector:
+      pgvector17:
         condition: service_healthy
-      initdb:
+      n8n-import:
         condition: service_completed_successfully
-    networks:
-      - chatbot_network
 
-  chat_service:
-    build:
-      context: ./services
-      dockerfile: chat_service/Dockerfile
-    restart: unless-stopped
-    env_file:
-      - ./.env
-    ports:
-      - "8001:8001"
-    depends_on:
-      pgvector:
-        condition: service_healthy
-      initdb:
-        condition: service_completed_successfully
-      n8n:
-        condition: service_started
-    networks:
-      - chatbot_network
+  # qdrant:
+  #   image: qdrant/qdrant
+  #   hostname: qdrant
+  #   container_name: qdrant
+  #   networks: ['demo']
+  #   restart: unless-stopped
+  #   ports:
+  #     - 6333:6333
+  #   volumes:
+  #     - qdrant_storage:/qdrant/storage
 
-  user_service:
-    build:
-      context: ./services
-      dockerfile: user_service/Dockerfile
-    restart: unless-stopped
-    env_file:
-      - ./.env
-    ports:
-      - "8002:8002"
-    depends_on:
-      pgvector:
-        condition: service_healthy
-      initdb:
-        condition: service_completed_successfully
-      n8n:
-        condition: service_started
-    networks:
-      - chatbot_network
-
-  gateway:
-    build:
-      context: ./services
-      dockerfile: gateway/Dockerfile
-    restart: unless-stopped
-    env_file:
-      - ./.env
-    ports:
-      - "2323:2323"
-    depends_on:
-      chat_service:
-        condition: service_started
-      user_service:
-        condition: service_started
-    networks:
-      - chatbot_network
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    env_file:
-      - ./.env
-    environment:
-      - PUBLIC_GATEWAY_URL=${PUBLIC_GATEWAY_URL:-http://gateway:2323}
-    ports:
-      - "7777:8080"
-    depends_on:
-      gateway:
-        condition: service_started
-    networks:
-      - chatbot_network
+  ollama-cpu:
+    profiles: ["cpu"]
+    <<: *service-ollama
 
   ollama-gpu:
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_storage:/root/.ollama
+    profiles: ["gpu-nvidia"]
+    <<: *service-ollama
+    networks: ['demo', 'my_shared_network']
     environment:
-      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_CONTEXT_LENGTH=5000
+      - CUDA_VISIBLE_DEVICES=0
+      # - OLLAMA_NUM_PARALLEL=10
+      # - OLLAMA_MAX_LOADED_MODELS=2
+      # - OLLAMA_FLASH_ATTENTION=true
+      - OLLAMA_KEEP_ALIVE=12h
+      # - OLLAMA_NEW_ENGINE=true
+      # - OLLAMA_MULTIUSER_CACHE=true
+      - OLLAMA_DEBUG=false
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: ["gpu"]
-    networks:
-      - chatbot_network
+              capabilities: [gpu]
 
-volumes:
-  pgvector_storage:
-  n8n_storage:
-  ollama_storage:
+  ollama-gpu-amd:
+    profiles: ["gpu-amd"]
+    <<: *service-ollama
+    image: ollama/ollama:rocm
+    devices:
+      - "/dev/kfd"
+      - "/dev/dri"
 
-networks:
-  chatbot_network:
-    driver: bridge
+  ollama-pull-llama-cpu:
+    profiles: ["cpu"]
+    <<: *init-ollama
+    depends_on:
+      - ollama-cpu
+
+  ollama-pull-llama-gpu:
+    profiles: ["gpu-nvidia"]
+    <<: *init-ollama
+    depends_on:
+      - ollama-gpu
+
+  ollama-pull-llama-gpu-amd:
+    profiles: [gpu-amd]
+    <<: *init-ollama
+    image: ollama/ollama:rocm
+    depends_on:
+     - ollama-gpu-amd
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok
+    restart: unless-stopped
+    environment:
+      - NGROK_AUTHTOKEN=${NG_CRE}
+    command: http --domain=${NG_URL} n8n:5678
+    network_mode: "service:n8n"
+    depends_on:
+      n8n:
+        condition: service_started
+
+  infinity-cafe-model:
+    image: ollama/ollama:latest
+    networks: ['demo']
+    container_name: infinity-cafe-model
+    depends_on:
+      n8n:
+        condition: service_started
+    volumes:
+      - ollama_storage:/root/.ollama
+      - ./modelfile:/modelfile
+    entrypoint: /bin/sh
+    environment:
+    - OLLAMA_HOST=host.docker.internal:11434
+    command:
+      - "-c"
+      - "sleep 3; echo 'Creating infinityCafe Model'; ollama create infinityCafe -f /modelfile/cafe.modelfile"
+
+  pgadmin:
+    image: dpage/pgadmin4
+    networks: ['demo']
+    hostname: pgadmin
+    container_name: pgadmin-container
+    depends_on:
+      pgvector17:
+        condition: service_healthy
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    restart: unless-stopped
+
+  pgvector17:
+    image: pgvector/pgvector:pg17
+    networks: ['demo']
+    hostname: pgvector
+    container_name: pgvector
+    ports:
+     - 5555:5432
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    volumes:
+    #  - ./pgvector-init.sql:/docker-entrypoint-initdb.d/init.sql
+     - pgvector_storage:/var/lib/postgresql/data
+     - ./initdb:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h pgvector -U ${POSTGRES_USER} -d postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # command: >
+    #   bash -c "
+    #   until pg_isready -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres; do
+    #     echo waiting for PGVECTOR...;
+    #     sleep 2;
+    #   done &&
+    #   psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -tc \"SELECT 1 FROM pg_database WHERE datname = 'n8n2'\" |
+    #   grep -q 1 || psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -c 'CREATE DATABASE n8n2'"
+
+  initdb:
+    image: pgvector/pgvector:pg17
+    networks: ['demo']
+    depends_on:
+      pgvector17:
+        condition: service_healthy
+    volumes:
+      - ./initdb:/initdb
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+          until pg_isready -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres; do
+            echo waiting for PGVECTOR...;
+            sleep 2;
+          done &&
+
+          echo 'Create Database n8n' &&
+          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'n8n'" |
+          grep -q 1 || psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -c 'CREATE DATABASE n8n' &&
+
+
+
+          echo 'Create Database User...' &&
+          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB_USER}'" |
+          grep -q 1 || psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -c 'CREATE DATABASE ${POSTGRES_DB_USER}' &&
+
+          echo 'Create Database Car...' &&
+          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB_CAR}'" |
+          grep -q 1 || psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -c 'CREATE DATABASE ${POSTGRES_DB_CAR}' &&
+          
+          echo 'All databases created successfully!' &&
+          echo 'Initializing vector extension and seeding data...' &&
+          
+          # Initialize each database with vector extension
+          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_DEFAULT} -c 'CREATE EXTENSION IF NOT EXISTS vector;' &&
+          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_CAR} -c 'CREATE EXTENSION IF NOT EXISTS vector;' &&
+          
+          # Run seeder for each database (modify seeder.sql accordingly)
+          echo 'Seeding databases with initial data...' &&
+          psql -v ON_ERROR_STOP=1 -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_DEFAULT} -f /initdb/seeder_db_default.sql &&
+          psql -v ON_ERROR_STOP=1 -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_CAR} -f /initdb/seeder_db_car.sql &&
+
+          echo 'Database initialization completed successfully!'
+    environment:
+      - POSTGRES_DB_DEFAULT=${POSTGRES_DB_DEFAULT}
+      - POSTGRES_DB_CAR=${POSTGRES_DB_CAR}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_HOST_AUTH_METHOD=trust
+
+
+  user_service:
+    networks: ['demo', 'my_shared_network']
+    hostname: user_service
+    build:
+      context: ./infinity/ 
+      dockerfile: user_service/Dockerfile
+    container_name: user_service
+    depends_on:
+      pgvector17:
+        condition: service_healthy
+      n8n-import:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    ports:
+      - "8005:8005" 
+    extra_hosts:
+      - "ollama:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://user_service:8005/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  car_service:
+    networks: ['demo', 'my_shared_network']
+    hostname: car_service
+    build:
+      context: ./infinity/
+      dockerfile: car_service/Dockerfile
+    container_name: car_service
+    depends_on:
+      pgvector17:
+        condition: service_healthy
+      n8n-import:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    ports:
+      - "8007:8007"
+    extra_hosts:
+      - "ollama:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://car_service:8007/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+
+  # kitchen_dashboard_pwa:
+  #   build:
+  #     context: ./frontend/
+  #     dockerfile: Dockerfile
+  #   container_name: kitchen_dashboard_pwa
+  #   hostname: kitchen_dashboard_pwa
+  #   networks: ['demo']
+  #   ports:
+  #     - "8080:8080"
+  #   # depends_on:
+  #   #   - kitchen_service
+  #   extra_hosts:
+  #     - "ollama:host-gateway"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: infinity-frontend
+    hostname: frontend
+    networks: ['demo']
+    ports:
+      - "7777:8080"
+    volumes:
+      - ./frontend/public:/app/public
+    extra_hosts:
+      - "ollama:host-gateway"
+    depends_on:
+      gateway:
+        condition: service_started
+      
+  # qwenagent:
+  #   networks: ['demo']
+  #   hostname: qwenagent
+  #   build:
+  #     context: ./qwenagent/
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "7860:7860"  # Port GUI WebUI, sesuaikan kalau berbeda
+  #     - "9000:9000"  # Port untuk API, sesuaikan kalau berbeda
+  #   container_name: qwenagent
+  #   depends_on:
+  #     menu_service:
+  #       condition: service_started
+  #     kitchen_service:
+  #       condition: service_started
+  #     order_service:
+  #       condition: service_started
+  #   env_file:
+  #     - .env
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://qwenagent:9000/api/health"]
+  #     # interval: 3s
+  #     # timeout: 5s
+  #     # retries: 0
+
+  gateway:
+    networks: ['demo']
+    hostname: gateway
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    ports:
+      - "2323:2323"
+    depends_on:
+      user_service:
+        condition: service_started
+      car_service:
+        condition: service_started
+    env_file:
+      - .env
+
+  # seed_data:
+  #   networks: ['demo']
+  #   build:
+  #     context: .
+  #     dockerfile: seed.Dockerfile
+  #   environment:
+  #     - DATABASE_URL=${DATABASE_URL}
+  #   depends_on:
+  #     n8n:
+  #       condition: service_started
+
+
+  # gateway:
+  #   hostname: gateway
+  #   networks: ['demo']
+  #   build:
+  #     context: .
+  #     dockerfile: gateway/Dockerfile
+  #   ports:
+  #     - "2323:2323"
+  #   volumes:
+  #     - ./gateway/gateway.py:/app/gateway.py  # 🔥 mount file langsung
+  #   env_file:
+  #     - .env
+  #   depends_on:
+  #     - menu_service
+  #     - order_service
+
+
+  # fastmcp_server:
+  #   networks: ['demo']
+  #   hostname: fastmcp_server
+  #   build:
+  #     context: ./fastMCP_server/
+  #     dockerfile: Dockerfile
+  #   container_name: fastmcp_server
+    # depends_on:
+    #   menu_service:
+    #     condition: service_started
+    #   order_service:
+    #     condition: service_started
+    #   kitchen_service:
+    #     condition: service_started
+    # env_file:
+    #   - .env
+    # ports:
+    #   - "2323:2323"
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:2323/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 5
+
+  # mcp_inspector:
+  #   build:
+  #     context: ./mcp_inspector/
+  #     dockerfile: Dockerfile
+  #   container_name: mcp_inspector
+  #   ports:
+  #     - "3000:3000"  # Ganti jika inspector kamu pakai port berbeda
+  #   networks: ['demo']
+
+  
+  # supergateway:
+  #   image: supercorp/supergateway
+  #   ports:
+  #     - "23231:23231"
+  #   volumes:
+  #     - ${GATE_FOLDER}:/supergateFolder
+  #   command: >
+  #     --stdio "npx -y @modelcontextprotocol/server-filesystem /supergateFolder"
+  #     --baseUrl http://fastmcp_server:${HOST_PORT}
+  #     --ssePath /sse
+  #     --messagePath /message
+  #   stdin_open: true
+  #   tty: true
+  #   environment:
+  #     - NODE_ENV=production
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://fastmcp_server:${HOST_PORT}/sse"]
+    #   interval: 10s
+    #   timeout: 5s
+    #   retries: 5
+    #   start_period: 5s
+    # restart: always
+    # depends_on:
+    #   fastmcp_server:
+    #     condition: service_started
+
+#      --baseUrl http://fastmcp_server:${HOST_PORT}
+#      --port ${CONTAINER_PORT}
+
+  # mindsdb:
+  #   networks: ['demo']
+  #   hostname: mindsdb
+  #   image: mindsdb/mindsdb
+  #   container_name: mindsdb_container
+  #   ports:
+  #     - "47334:47334"  # HTTP API
+  #     - "47335:47335"  # MySQL API
+  #     - "47336:47336"  # MongoDB API
+  #     - "55432:55432"  # PostgreSQL API
+  #   environment:
+  #     MINDSDB_APIS: "http,mysql,mongodb,postgres"
+  #   restart: unless-stopped
+
+#  postgres:
+#    image: postgres:16-alpine
+#    #image: pgvector/pgvector:pg17
+#    hostname: postgres
+#    networks: ['demo']
+#    restart: unless-stopped
+#    environment:
+#      - POSTGRES_USER
+#      - POSTGRES_PASSWORD
+#      - POSTGRES_DB
+#    volumes:
+#      - postgres_storage:/var/lib/postgresql/data
+#    healthcheck:
+#      test: ['CMD-SHELL', 'pg_isready -h localhost -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+#      interval: 5s
+#      timeout: 5s
+#      retries: 10
+  
