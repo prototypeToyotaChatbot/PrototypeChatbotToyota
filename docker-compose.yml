@@ -1,0 +1,170 @@
+version: "3.9"
+
+services:
+  pgvector:
+    image: pgvector/pgvector:pg17
+    container_name: pgvector
+    hostname: pgvector
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    ports:
+      - "5555:5432"
+    volumes:
+      - pgvector_storage:/var/lib/postgresql/data
+    networks:
+      - chatbot_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  initdb:
+    image: pgvector/pgvector:pg17
+    container_name: initdb
+    depends_on:
+      pgvector:
+        condition: service_healthy
+    restart: "no"
+    env_file:
+      - ./.env
+    volumes:
+      - ./database/init:/scripts:ro
+    entrypoint: ["/bin/bash", "-c"]
+    command: >-
+      psql -v ON_ERROR_STOP=1 \
+           -v CHATBOT_DB="$CHATBOT_DB" \
+           -v USER_DB="$USER_DB" \
+           -v N8N_DB="$N8N_DB" \
+           -h pgvector -U "$POSTGRES_USER" -d postgres -f /scripts/create_databases.sql
+    networks:
+      - chatbot_network
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=pgvector
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${N8N_DB:-n8n_db}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - GENERIC_TIMEZONE=${N8N_TIMEZONE:-Asia/Jakarta}
+      - N8N_EDITOR_BASE_URL=${N8N_EDITOR_BASE_URL:-http://localhost:5678}
+      - N8N_HOST=${N8N_HOST:-n8n.local}
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_storage:/home/node/.n8n
+    depends_on:
+      pgvector:
+        condition: service_healthy
+      initdb:
+        condition: service_completed_successfully
+    networks:
+      - chatbot_network
+
+  chat_service:
+    build:
+      context: ./services
+      dockerfile: chat_service/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    ports:
+      - "8001:8001"
+    depends_on:
+      pgvector:
+        condition: service_healthy
+      initdb:
+        condition: service_completed_successfully
+      n8n:
+        condition: service_started
+    networks:
+      - chatbot_network
+
+  user_service:
+    build:
+      context: ./services
+      dockerfile: user_service/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    ports:
+      - "8002:8002"
+    depends_on:
+      pgvector:
+        condition: service_healthy
+      initdb:
+        condition: service_completed_successfully
+      n8n:
+        condition: service_started
+    networks:
+      - chatbot_network
+
+  gateway:
+    build:
+      context: ./services
+      dockerfile: gateway/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    ports:
+      - "2323:2323"
+    depends_on:
+      chat_service:
+        condition: service_started
+      user_service:
+        condition: service_started
+    networks:
+      - chatbot_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      - PUBLIC_GATEWAY_URL=${PUBLIC_GATEWAY_URL:-http://gateway:2323}
+    ports:
+      - "7777:8080"
+    depends_on:
+      gateway:
+        condition: service_started
+    networks:
+      - chatbot_network
+
+  ollama-gpu:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_storage:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: ["gpu"]
+    networks:
+      - chatbot_network
+
+volumes:
+  pgvector_storage:
+  n8n_storage:
+  ollama_storage:
+
+networks:
+  chatbot_network:
+    driver: bridge
