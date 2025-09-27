@@ -224,6 +224,15 @@ class DressCodeSchema(BaseModel):
     class Config:
         from_attributes = True
 
+class ChatRequest(BaseModel):
+    message: str
+    context: Optional[Dict[str, Any]] = None
+
+class ChatResponse(BaseModel):
+    response: str
+    context: Optional[Dict[str, Any]] = None
+    suggestions: Optional[List[str]] = None
+
 # =================================================================
 # APP & MIDDLEWARE
 # =================================================================
@@ -623,6 +632,127 @@ async def get_dress_codes(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error getting dress codes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat_with_assistant(request: ChatRequest, db: Session = Depends(get_db)):
+    """Chat dengan assistant untuk konsultasi mobil"""
+    try:
+        message = request.message.lower()
+        
+        # Simple rule-based responses based on message content
+        if any(word in message for word in ["hello", "hi", "halo", "hai"]):
+            response = "Hello! I'm your car consultant assistant. I can help you find the perfect car, compare models, check promotions, and more. What can I help you with today?"
+            suggestions = [
+                "Show me available cars",
+                "What promotions are available?",
+                "I need a family car",
+                "Compare different models"
+            ]
+            
+        elif any(word in message for word in ["car", "mobil", "model", "available"]):
+            # Get available cars
+            cars = db.query(Car).all()
+            car_list = [f"{car.model_name} ({car.segment})" for car in cars[:5]]
+            response = f"We have several great car models available:\n\n" + "\n".join([f"• {car}" for car in car_list])
+            if len(cars) > 5:
+                response += f"\n\nAnd {len(cars) - 5} more models. Would you like to see more details about any specific model?"
+            suggestions = [
+                "Tell me about Avanza",
+                "What's the cheapest option?",
+                "Show me family cars"
+            ]
+            
+        elif any(word in message for word in ["promo", "promotion", "discount", "offer"]):
+            # Get active promotions
+            promotions = db.query(Promotion).filter(
+                Promotion.end_date >= func.current_date()
+            ).limit(3).all()
+            
+            if promotions:
+                promo_list = []
+                for promo in promotions:
+                    if promo.discount_percentage:
+                        discount = f"{promo.discount_percentage}% off"
+                    elif promo.discount_amount:
+                        discount = f"Rp {promo.discount_amount:,.0f} discount"
+                    else:
+                        discount = "Special offer"
+                    promo_list.append(f"• {promo.promo_title} - {discount}")
+                
+                response = "Here are our current promotions:\n\n" + "\n".join(promo_list)
+                suggestions = [
+                    "Tell me more about these offers",
+                    "Which cars are included?",
+                    "How do I apply for this promo?"
+                ]
+            else:
+                response = "We don't have any active promotions right now, but we always have competitive prices! Would you like to see our car models and pricing?"
+                suggestions = [
+                    "Show me car prices",
+                    "What's the best value car?",
+                    "Tell me about financing options"
+                ]
+                
+        elif any(word in message for word in ["family", "keluarga", "anak", "children"]):
+            # Recommend family cars
+            family_cars = db.query(Car).filter(
+                Car.segment.ilike("%MPV%") | Car.segment.ilike("%SUV%")
+            ).all()
+            
+            if family_cars:
+                car_list = [f"• {car.model_name} - Perfect for {car.segment.lower()}" for car in family_cars[:3]]
+                response = "For families, I recommend these spacious and safe options:\n\n" + "\n".join(car_list)
+                suggestions = [
+                    "Compare these family cars",
+                    "What's the safest option?",
+                    "Show me pricing for family cars"
+                ]
+            else:
+                response = "Let me help you find the perfect family car! What's your preferred seating capacity and budget range?"
+                suggestions = [
+                    "7-seater cars",
+                    "Budget under 200 million",
+                    "Most fuel efficient"
+                ]
+                
+        elif any(word in message for word in ["compare", "comparison", "versus", "vs"]):
+            response = "I can help you compare different car models! Which cars would you like to compare? You can also tell me your priorities like price, fuel efficiency, or features."
+            suggestions = [
+                "Compare Avanza vs Xenia",
+                "Best fuel efficient cars",
+                "Compare prices"
+            ]
+            
+        elif any(word in message for word in ["price", "harga", "cost", "budget"]):
+            response = "I can help you find cars within your budget! What's your price range? We have options from economy to premium segments."
+            suggestions = [
+                "Cars under 150 million",
+                "Cars under 300 million",
+                "What's the cheapest car?"
+            ]
+            
+        else:
+            # Default response for unhandled queries
+            response = "I'd be happy to help you with car-related questions! I can assist with finding cars, checking promotions, comparing models, and providing recommendations based on your needs."
+            suggestions = [
+                "Show me available cars",
+                "What promotions do you have?",
+                "I need buying advice",
+                "Compare different models"
+            ]
+            
+        return ChatResponse(
+            response=response,
+            suggestions=suggestions,
+            context={"last_query": request.message}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in chat: {e}")
+        return ChatResponse(
+            response="I'm sorry, I'm experiencing some technical difficulties right now. Please try again or contact our sales team directly.",
+            suggestions=["Try asking again", "Contact sales team"]
+        )
 
 if __name__ == "__main__":
     # Create tables if they don't exist (for local development)

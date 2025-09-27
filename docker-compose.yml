@@ -353,9 +353,7 @@ services:
     hostname: frontend
     networks: ['demo']
     ports:
-      - "7777:8080"
-    volumes:
-      - ./frontend/public:/app/public
+      - "7777:3000"
     extra_hosts:
       - "ollama:host-gateway"
     depends_on:

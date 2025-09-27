@@ -191,6 +191,85 @@ async def get_dress_codes():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch dress codes: {str(e)}")
 
+# ========== CHAT ENDPOINTS ==========
+@app.post("/chat", tags=["Chat"])
+async def chat_with_assistant(request: Request):
+    """Chat dengan assistant untuk konsultasi mobil"""
+    try:
+        body = await request.json()
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{CAR_SERVICE_URL}/chat", json=body)
+            response.raise_for_status()
+            return response.json()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process chat: {str(e)}")
+
+@app.post("/api/chat", tags=["Chat"])
+async def api_chat_with_assistant(request: Request):
+    """API Chat endpoint untuk frontend PWA"""
+    try:
+        body = await request.json()
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{CAR_SERVICE_URL}/chat", json=body)
+            response.raise_for_status()
+            chat_response = response.json()
+            # Format response untuk frontend
+            return {
+                "response": chat_response.get("response", "I'm sorry, I couldn't process your request."),
+                "status": "success"
+            }
+    except Exception as e:
+        return {
+            "response": "I'm experiencing some technical difficulties. Please try again later.",
+            "status": "error",
+            "error": str(e)
+        }
+
+# ========== AUTH ENDPOINTS ==========
+@app.post("/api/auth/login", tags=["Auth"])
+async def login(request: Request):
+    """Login endpoint untuk frontend PWA"""
+    try:
+        body = await request.json()
+        # Simulasi autentikasi sederhana
+        email = body.get("email")
+        password = body.get("password")
+        
+        if email and password:
+            # Di implementasi nyata, validasi dengan database
+            return {
+                "token": "dummy_jwt_token_for_demo",
+                "user": {
+                    "email": email,
+                    "name": "Demo User"
+                },
+                "status": "success"
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Email and password required")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+
+@app.post("/api/auth/register", tags=["Auth"])
+async def register(request: Request):
+    """Register endpoint untuk frontend PWA"""
+    try:
+        body = await request.json()
+        name = body.get("name")
+        email = body.get("email")
+        password = body.get("password")
+        
+        if name and email and password:
+            # Di implementasi nyata, simpan ke database
+            return {
+                "message": "Account created successfully",
+                "status": "success"
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Name, email and password required")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+
 # Util fungsi forwarding request
 async def forward(request: Request, target_url: str):
     async with httpx.AsyncClient() as client:
