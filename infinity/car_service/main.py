@@ -16,6 +16,8 @@ import uuid
 from datetime import date, datetime
 from pytz import timezone as pytz_timezone
 from fastapi_mcp import FastApiMCP
+import httpx
+import asyncio
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +25,19 @@ logger = logging.getLogger(__name__)
 
 # Database configuration from environment variables
 DATABASE_URL = os.getenv("DATABASE_URL_CAR", "postgresql://postgres:postgres@pgvector:5432/car_db")
+
+# Chatbot Configuration
+CHATBOT_CONFIG = {
+    "n8n_webhook_url": os.getenv("N8N_CHATBOT_WEBHOOK_URL", ""),  # URL webhook N8N untuk chatbot
+    "use_ai_processing": os.getenv("USE_AI_PROCESSING", "false").lower() == "true",
+    "welcome_message": os.getenv("WELCOME_MESSAGE", 
+        "Hello! I'm your car consultant assistant. I can help you find the perfect car, compare models, check promotions, and more. What can I help you with today?"),
+    "fallback_message": os.getenv("FALLBACK_MESSAGE",
+        "I'd be happy to help you with car-related questions! I can assist with finding cars, checking promotions, comparing models, and providing recommendations based on your needs."),
+    "error_message": os.getenv("ERROR_MESSAGE",
+        "I'm sorry, I'm experiencing some technical difficulties right now. Please try again or contact our sales team directly."),
+    "webhook_timeout": int(os.getenv("WEBHOOK_TIMEOUT", "30"))  # timeout dalam detik
+}
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -633,107 +648,73 @@ async def get_dress_codes(db: Session = Depends(get_db)):
         logger.error(f"Error getting dress codes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/chat", response_model=ChatResponse)
-async def chat_with_assistant(request: ChatRequest, db: Session = Depends(get_db)):
-    """Chat dengan assistant untuk konsultasi mobil"""
+async def call_n8n_webhook(message: str, context: dict = None) -> dict:
+    """Memanggil N8N webhook untuk AI processing"""
     try:
-        message = request.message.lower()
+        webhook_url = CHATBOT_CONFIG["n8n_webhook_url"]
+        if not webhook_url:
+            logger.warning("N8N webhook URL tidak dikonfigurasi")
+            return None
+            
+        payload = {
+            "message": message,
+            "context": context or {},
+            "timestamp": datetime.now().isoformat()
+        }
         
-        # Simple rule-based responses based on message content
-        if any(word in message for word in ["hello", "hi", "halo", "hai"]):
-            response = "Hello! I'm your car consultant assistant. I can help you find the perfect car, compare models, check promotions, and more. What can I help you with today?"
-            suggestions = [
-                "Show me available cars",
-                "What promotions are available?",
-                "I need a family car",
-                "Compare different models"
-            ]
+        timeout = CHATBOT_CONFIG["webhook_timeout"]
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(webhook_url, json=payload)
+            response.raise_for_status()
             
-        elif any(word in message for word in ["car", "mobil", "model", "available"]):
-            # Get available cars
-            cars = db.query(Car).all()
-            car_list = [f"{car.model_name} ({car.segment})" for car in cars[:5]]
-            response = f"We have several great car models available:\n\n" + "\n".join([f"• {car}" for car in car_list])
-            if len(cars) > 5:
-                response += f"\n\nAnd {len(cars) - 5} more models. Would you like to see more details about any specific model?"
-            suggestions = [
-                "Tell me about Avanza",
-                "What's the cheapest option?",
-                "Show me family cars"
-            ]
+            result = response.json()
+            logger.info(f"N8N webhook response: {result}")
+            return result
             
-        elif any(word in message for word in ["promo", "promotion", "discount", "offer"]):
-            # Get active promotions
+    except httpx.TimeoutException:
+        logger.error(f"N8N webhook timeout after {timeout}s")
+        return None
+    except Exception as e:
+        logger.error(f"Error calling N8N webhook: {e}")
+        return None
+
+def get_welcome_response() -> ChatResponse:
+    """Mendapatkan respons selamat datang"""
+    return ChatResponse(
+        response=CHATBOT_CONFIG["welcome_message"],
+        suggestions=[
+            "Show me available cars",
+            "What promotions are available?",
+            "I need a family car",
+            "Compare different models"
+        ],
+        context={"type": "welcome"}
+    )
+
+async def get_fallback_response(message: str, db: Session) -> ChatResponse:
+    """Mendapatkan respons fallback dengan informasi dasar"""
+    try:
+        # Berikan beberapa informasi berguna berdasarkan kata kunci
+        message_lower = message.lower()
+        
+        if any(word in message_lower for word in ["car", "mobil", "model", "available"]):
+            cars = db.query(Car).limit(5).all()
+            car_list = [f"• {car.model_name} ({car.segment})" for car in cars]
+            response = f"Here are some of our popular car models:\n\n" + "\n".join(car_list)
+            suggestions = ["Tell me more about these cars", "Show me pricing", "Compare models"]
+            
+        elif any(word in message_lower for word in ["promo", "promotion", "discount"]):
             promotions = db.query(Promotion).filter(
                 Promotion.end_date >= func.current_date()
             ).limit(3).all()
-            
             if promotions:
-                promo_list = []
-                for promo in promotions:
-                    if promo.discount_percentage:
-                        discount = f"{promo.discount_percentage}% off"
-                    elif promo.discount_amount:
-                        discount = f"Rp {promo.discount_amount:,.0f} discount"
-                    else:
-                        discount = "Special offer"
-                    promo_list.append(f"• {promo.promo_title} - {discount}")
-                
-                response = "Here are our current promotions:\n\n" + "\n".join(promo_list)
-                suggestions = [
-                    "Tell me more about these offers",
-                    "Which cars are included?",
-                    "How do I apply for this promo?"
-                ]
+                response = f"We have {len(promotions)} active promotions! Would you like to see the details?"
+                suggestions = ["Show promotions", "Which cars are on sale?", "Tell me about discounts"]
             else:
-                response = "We don't have any active promotions right now, but we always have competitive prices! Would you like to see our car models and pricing?"
-                suggestions = [
-                    "Show me car prices",
-                    "What's the best value car?",
-                    "Tell me about financing options"
-                ]
-                
-        elif any(word in message for word in ["family", "keluarga", "anak", "children"]):
-            # Recommend family cars
-            family_cars = db.query(Car).filter(
-                Car.segment.ilike("%MPV%") | Car.segment.ilike("%SUV%")
-            ).all()
-            
-            if family_cars:
-                car_list = [f"• {car.model_name} - Perfect for {car.segment.lower()}" for car in family_cars[:3]]
-                response = "For families, I recommend these spacious and safe options:\n\n" + "\n".join(car_list)
-                suggestions = [
-                    "Compare these family cars",
-                    "What's the safest option?",
-                    "Show me pricing for family cars"
-                ]
-            else:
-                response = "Let me help you find the perfect family car! What's your preferred seating capacity and budget range?"
-                suggestions = [
-                    "7-seater cars",
-                    "Budget under 200 million",
-                    "Most fuel efficient"
-                ]
-                
-        elif any(word in message for word in ["compare", "comparison", "versus", "vs"]):
-            response = "I can help you compare different car models! Which cars would you like to compare? You can also tell me your priorities like price, fuel efficiency, or features."
-            suggestions = [
-                "Compare Avanza vs Xenia",
-                "Best fuel efficient cars",
-                "Compare prices"
-            ]
-            
-        elif any(word in message for word in ["price", "harga", "cost", "budget"]):
-            response = "I can help you find cars within your budget! What's your price range? We have options from economy to premium segments."
-            suggestions = [
-                "Cars under 150 million",
-                "Cars under 300 million",
-                "What's the cheapest car?"
-            ]
-            
+                response = "We always offer competitive prices! Let me know what car you're looking for."
+                suggestions = ["Show me cars", "What's your best price?", "I need a recommendation"]
         else:
-            # Default response for unhandled queries
-            response = "I'd be happy to help you with car-related questions! I can assist with finding cars, checking promotions, comparing models, and providing recommendations based on your needs."
+            response = CHATBOT_CONFIG["fallback_message"]
             suggestions = [
                 "Show me available cars",
                 "What promotions do you have?",
@@ -744,14 +725,55 @@ async def chat_with_assistant(request: ChatRequest, db: Session = Depends(get_db
         return ChatResponse(
             response=response,
             suggestions=suggestions,
-            context={"last_query": request.message}
+            context={"type": "fallback", "original_message": message}
         )
         
     except Exception as e:
-        logger.error(f"Error in chat: {e}")
+        logger.error(f"Error in fallback response: {e}")
         return ChatResponse(
-            response="I'm sorry, I'm experiencing some technical difficulties right now. Please try again or contact our sales team directly.",
+            response=CHATBOT_CONFIG["error_message"],
             suggestions=["Try asking again", "Contact sales team"]
+        )
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat_with_assistant(request: ChatRequest, db: Session = Depends(get_db)):
+    """Chat dengan assistant untuk konsultasi mobil"""
+    try:
+        message = request.message.strip()
+        
+        # Cek apakah ini pesan pembuka
+        if any(word in message.lower() for word in ["hello", "hi", "halo", "hai", "start"]):
+            return get_welcome_response()
+            
+        # Jika AI processing diaktifkan dan webhook URL tersedia
+        if CHATBOT_CONFIG["use_ai_processing"] and CHATBOT_CONFIG["n8n_webhook_url"]:
+            logger.info(f"Sending message to N8N webhook: {message}")
+            
+            # Panggil N8N webhook
+            ai_response = await call_n8n_webhook(message, request.context)
+            
+            if ai_response:
+                # Gunakan respons dari AI
+                return ChatResponse(
+                    response=ai_response.get("response", ai_response.get("message", "AI response received")),
+                    suggestions=ai_response.get("suggestions", ["Tell me more", "What else can you help with?"]),
+                    context=ai_response.get("context", {"source": "n8n_ai"})
+                )
+            else:
+                # Jika webhook gagal, gunakan fallback
+                logger.warning("N8N webhook failed, using fallback response")
+                return await get_fallback_response(message, db)
+        else:
+            # Jika AI processing tidak diaktifkan, gunakan fallback
+            logger.info(f"AI processing disabled, using fallback for: {message}")
+            return await get_fallback_response(message, db)
+            
+    except Exception as e:
+        logger.error(f"Error in chat endpoint: {e}")
+        return ChatResponse(
+            response=CHATBOT_CONFIG["error_message"],
+            suggestions=["Try asking again", "Contact sales team"],
+            context={"error": str(e)}
         )
 
 if __name__ == "__main__":
