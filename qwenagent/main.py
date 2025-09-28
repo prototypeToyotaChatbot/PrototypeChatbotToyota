@@ -49,17 +49,9 @@ def init_agent_service():
 	}
 	tools = [{
 		'mcpServers': {
-			'cafe_menus': {
-				'description': 'mcp server that provides Cafe Menu management',
-				'url': 'http://menu_service:8001/mcp',
-			},
-			'cafe_order': {
-				'description': 'mcp server that provides Cafe Menu order',
-				'url': 'http://order_service:8002/mcp',
-			},
-			'cafe_kitchen': {
-				'description': 'mcp server that provides Cafe kitchen',
-				'url': 'http://kitchen_service:8003/mcp',
+			'car_service': {
+				'description': 'MCP server for car information, recommendations, and sales.',
+				'url': 'http://car_service:8007/mcp'
 			}
 		}
 	}]

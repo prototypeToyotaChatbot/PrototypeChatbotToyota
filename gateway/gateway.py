@@ -371,6 +371,11 @@ async def register(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
+@app.api_route("/mcp/cars", methods=["POST"])
+async def proxy_cars(request: Request):
+    """Proxy untuk MCP car_service"""
+    return await forward(request, f"{CAR_SERVICE_URL}/mcp")
+    
 # Util fungsi forwarding request
 async def forward(request: Request, target_url: str):
     async with httpx.AsyncClient() as client:
