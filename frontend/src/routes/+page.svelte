@@ -1,19 +1,46 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	
-	let messages: Array<{id: number, text: string, isUser: boolean, timestamp: Date}> = [];
+
+	const USER_STORAGE_KEY = 'carbot:user-id';
+
+	const generateId = () =>
+		typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+			? crypto.randomUUID()
+			: `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+	let messages: Array<{ id: number; text: string; isUser: boolean; timestamp: Date }> = [];
 	let inputMessage = '';
 	let isLoading = false;
 	let chatContainer: HTMLDivElement;
-	
+	let userId = '';
+	let sessionId = generateId();
+	let sessionStartedAt = new Date().toISOString();
+
 	onMount(() => {
+		if (typeof window !== 'undefined') {
+			const storedUserId = localStorage.getItem(USER_STORAGE_KEY);
+			if (storedUserId) {
+				userId = storedUserId;
+			} else {
+				userId = generateId();
+				localStorage.setItem(USER_STORAGE_KEY, userId);
+			}
+
+			// Reset session info on every fresh page load
+			sessionId = generateId();
+			sessionStartedAt = new Date().toISOString();
+		}
+
 		// Add welcome message
-		messages = [...messages, {
-			id: Date.now(),
-			text: 'Hello! I\'m your chatbot assistant. How can I help you today?',
-			isUser: false,
-			timestamp: new Date()
-		}];
+		messages = [
+			...messages,
+			{
+				id: Date.now(),
+				text: "Hello! I'm your chatbot assistant. How can I help you today?",
+				isUser: false,
+				timestamp: new Date()
+			}
+		];
 	});
 	
 	async function sendMessage() {
@@ -33,14 +60,26 @@
 		isLoading = true;
 		
 		try {
-			// Call your backend API here
-			// For now, this is a simple echo response
+			const context = {
+				user_id: userId || generateId(),
+				session_id: sessionId,
+				session_started_at: sessionStartedAt,
+				locale: typeof navigator !== 'undefined' ? navigator.language : undefined,
+				timezone:
+					typeof Intl !== 'undefined'
+						? Intl.DateTimeFormat().resolvedOptions().timeZone
+						: undefined
+			};
+
 			const response = await fetch('/api/chat', {
 				method: 'POST',
 				headers: {
-					'Content-Type': 'application/json',
+					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify({ message: userMessage })
+				body: JSON.stringify({
+					message: userMessage,
+					context
+				})
 			});
 			
 			let botResponse = '';

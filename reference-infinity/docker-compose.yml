@@ -14,7 +14,7 @@ networks:
     # Hapus external: true
 
 x-n8n: &service-n8n
-  image: n8nio/n8n:latest
+  image: n8nio/n8n:1.93.0
   networks: ['demo']
   environment:
     - DB_TYPE=postgresdb
@@ -251,36 +251,175 @@ services:
           psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'n8n'" |
           grep -q 1 || psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -c 'CREATE DATABASE n8n' &&
 
+          echo 'Create Database Menu...' &&
+          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB_MENU}'" |
+          grep -q 1 || psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -c 'CREATE DATABASE ${POSTGRES_DB_MENU}' &&
 
+          echo 'Create Database Order...' &&
+          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB_ORDER}'" | 
+          grep -q 1 || psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -c "CREATE DATABASE ${POSTGRES_DB_ORDER}" &&
+
+          echo 'Create Database Kitchen...' &&
+          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB_KITCHEN}'" |
+          grep -q 1 || psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -c 'CREATE DATABASE ${POSTGRES_DB_KITCHEN}' &&
+
+          echo 'Create Database Inventory...' &&
+          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB_INVENTORY}'" |
+          grep -q 1 || psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -c 'CREATE DATABASE ${POSTGRES_DB_INVENTORY}' &&
 
           echo 'Create Database User...' &&
           psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB_USER}'" |
           grep -q 1 || psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -c 'CREATE DATABASE ${POSTGRES_DB_USER}' &&
-
-          echo 'Create Database Car...' &&
-          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB_CAR}'" |
-          grep -q 1 || psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -c 'CREATE DATABASE ${POSTGRES_DB_CAR}' &&
           
           echo 'All databases created successfully!' &&
           echo 'Initializing vector extension and seeding data...' &&
           
           # Initialize each database with vector extension
           psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_DEFAULT} -c 'CREATE EXTENSION IF NOT EXISTS vector;' &&
-          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_CAR} -c 'CREATE EXTENSION IF NOT EXISTS vector;' &&
+          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_MENU} -c 'CREATE EXTENSION IF NOT EXISTS vector;' &&
+          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_ORDER} -c 'CREATE EXTENSION IF NOT EXISTS vector;' &&
+          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_KITCHEN} -c 'CREATE EXTENSION IF NOT EXISTS vector;' &&
+          psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_INVENTORY} -c 'CREATE EXTENSION IF NOT EXISTS vector;' &&
           
           # Run seeder for each database (modify seeder.sql accordingly)
           echo 'Seeding databases with initial data...' &&
           psql -v ON_ERROR_STOP=1 -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_DEFAULT} -f /initdb/seeder_db_default.sql &&
-          psql -v ON_ERROR_STOP=1 -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_CAR} -f /initdb/seeder_db_car.sql &&
+          psql -v ON_ERROR_STOP=1 -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_MENU} -f /initdb/seeder_db_menu.sql &&
+          psql -v ON_ERROR_STOP=1 -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_MENU} -f /initdb/seeder_db_menu_recipes.sql &&
+          psql -v ON_ERROR_STOP=1 -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_ORDER} -f /initdb/seeder_db_order.sql &&
+          psql -v ON_ERROR_STOP=1 -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_KITCHEN} -f /initdb/seeder_db_kitchen.sql &&
+          psql -v ON_ERROR_STOP=1 -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${POSTGRES_DB_INVENTORY} -f /initdb/seeder_db_inventory.sql &&
 
           echo 'Database initialization completed successfully!'
     environment:
+      - POSTGRES_DB_MENU=${POSTGRES_DB_MENU}
+      - POSTGRES_DB_ORDER=${POSTGRES_DB_ORDER}
+      - POSTGRES_DB_KITCHEN=${POSTGRES_DB_KITCHEN}
+      - POSTGRES_DB_INVENTORY=${POSTGRES_DB_INVENTORY}
       - POSTGRES_DB_DEFAULT=${POSTGRES_DB_DEFAULT}
-      - POSTGRES_DB_CAR=${POSTGRES_DB_CAR}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_HOST_AUTH_METHOD=trust
+
+  menu_service:
+    networks: ['demo', 'my_shared_network']
+    hostname: menu_service
+    build:
+      context: ./infinity/
+      dockerfile: menu_service/Dockerfile
+    container_name: menu_service
+    depends_on:
+      pgvector17:
+        condition: service_healthy
+      n8n-import:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    ports:
+      - "8001:8001"
+    extra_hosts:
+      - "ollama:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://menu_service:8001/health"]
+      # interval: 3s
+      # timeout: 5s
+      # retries: 3
+
+
+  order_service:
+    networks: ['demo', 'my_shared_network']
+    hostname: order_service
+    build:
+      context: ./infinity/
+      dockerfile: order_service/Dockerfile
+    container_name: order_service
+    depends_on:
+      pgvector17:
+        condition: service_healthy
+      n8n-import:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    ports:
+      - "8002:8002"
+    extra_hosts:
+      - "ollama:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://order_service:8002/health"]
+      # interval: 5s
+      # timeout: 5s
+      # retries: 3
+
+
+  kitchen_service:
+    networks: ['demo', 'my_shared_network']
+    hostname: kitchen_service
+    build:
+      context: ./infinity/
+      dockerfile: kitchen_service/Dockerfile
+    container_name: kitchen_service
+    depends_on:
+      pgvector17:
+        condition: service_healthy
+      n8n-import:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    ports:
+      - "8003:8003"
+    extra_hosts:
+      - "ollama:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://kitchen_service:8003/health"]
+
+  report_service:
+    networks: ['demo', 'my_shared_network']
+    hostname: report_service
+    build:
+      context: ./infinity/
+      dockerfile: report_service/Dockerfile
+    container_name: report_service
+    depends_on:
+      pgvector17:
+        condition: service_healthy
+      n8n-import:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    ports:
+      - "8004:8004"
+    extra_hosts:
+      - "ollama:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://kitchen_service:8003/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  inventory_service:
+    networks: ['demo', 'my_shared_network']
+    hostname: inventory_service
+    build:
+      context: ./infinity/
+      dockerfile: inventory_service/Dockerfile
+    container_name: inventory_service
+    depends_on:
+      pgvector17:
+        condition: service_healthy
+      n8n-import:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    ports:
+      - "8006:8006"
+    extra_hosts:
+      - "ollama:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://inventory_service:8006/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
 
 
   user_service:
@@ -307,30 +446,6 @@ services:
       timeout: 5s
       retries: 3
 
-  car_service:
-    networks: ['demo', 'my_shared_network']
-    hostname: car_service
-    build:
-      context: ./infinity/
-      dockerfile: car_service/Dockerfile
-    container_name: car_service
-    depends_on:
-      pgvector17:
-        condition: service_healthy
-      n8n-import:
-        condition: service_completed_successfully
-    env_file:
-      - .env
-    ports:
-      - "8007:8007"
-    extra_hosts:
-      - "ollama:host-gateway"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8007/health')"]
-      interval: 5s
-      timeout: 5s
-      retries: 3
-
 
   # kitchen_dashboard_pwa:
   #   build:
@@ -353,11 +468,19 @@ services:
     hostname: frontend
     networks: ['demo']
     ports:
-      - "7777:3000"
+      - "7777:8080"
+    volumes:
+      - ./frontend/public:/app/public
     extra_hosts:
       - "ollama:host-gateway"
     depends_on:
       gateway:
+        condition: service_started
+      menu_service:
+        condition: service_started
+      kitchen_service:
+        condition: service_started
+      order_service:
         condition: service_started
       
   # qwenagent:
@@ -396,9 +519,13 @@ services:
     ports:
       - "2323:2323"
     depends_on:
-      user_service:
+      menu_service:
         condition: service_started
-      car_service:
+      order_service:
+        condition: service_started
+      kitchen_service:
+        condition: service_started
+      report_service:
         condition: service_started
     env_file:
       - .env

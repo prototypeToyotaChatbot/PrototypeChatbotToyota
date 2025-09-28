@@ -1,16 +1,19 @@
 # gateway_service.py
 from fastapi import FastAPI, Request, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 import httpx
 import json
 from typing import Optional
+import logging
 
 app = FastAPI(
     title="Infinity Gateway", 
     description="Gateway untuk routing requests ke user service", 
     version="1.0"
 )
+
+logger = logging.getLogger(__name__)
 
 # Enable CORS
 app.add_middleware(
@@ -207,23 +210,121 @@ async def chat_with_assistant(request: Request):
 @app.post("/api/chat", tags=["Chat"])
 async def api_chat_with_assistant(request: Request):
     """API Chat endpoint untuk frontend PWA"""
+    fallback_message = "I'm experiencing some technical difficulties. Please try again later."
+
     try:
         body = await request.json()
-        async with httpx.AsyncClient() as client:
+    except Exception as parse_error:
+        error_message = str(parse_error) or parse_error.__class__.__name__
+        logger.error("Failed to parse /api/chat request body: %s", error_message)
+        return JSONResponse(
+            status_code=400,
+            content={
+                "response": fallback_message,
+                "status": "error",
+                "error": "Invalid request payload"
+            }
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(f"{CAR_SERVICE_URL}/chat", json=body)
             response.raise_for_status()
-            chat_response = response.json()
-            # Format response untuk frontend
-            return {
-                "response": chat_response.get("response", "I'm sorry, I couldn't process your request."),
-                "status": "success"
+    except httpx.HTTPStatusError as http_error:
+        upstream_status = http_error.response.status_code if http_error.response else 502
+        upstream_detail: Optional[str] = None
+        if http_error.response:
+            try:
+                data = http_error.response.json()
+                if isinstance(data, dict):
+                    upstream_detail = (
+                        data.get("detail")
+                        or data.get("response")
+                        or data.get("error")
+                    )
+            except Exception:
+                upstream_detail = None
+
+        error_message = upstream_detail or str(http_error) or http_error.__class__.__name__
+        logger.error(
+            "Car service /chat returned HTTP %s: %s",
+            upstream_status,
+            error_message
+        )
+        return JSONResponse(
+            status_code=upstream_status,
+            content={
+                "response": fallback_message,
+                "status": "error",
+                "error": error_message
             }
-    except Exception as e:
-        return {
-            "response": "I'm experiencing some technical difficulties. Please try again later.",
-            "status": "error",
-            "error": str(e)
-        }
+        )
+    except Exception as call_error:
+        error_message = str(call_error) or call_error.__class__.__name__
+        logger.exception("Failed to call car service /chat")
+        return JSONResponse(
+            status_code=502,
+            content={
+                "response": fallback_message,
+                "status": "error",
+                "error": error_message
+            }
+        )
+
+    try:
+        chat_response = response.json()
+    except Exception as decode_error:
+        error_message = str(decode_error) or decode_error.__class__.__name__
+        logger.error("Failed to decode car service /chat response: %s", error_message)
+        return JSONResponse(
+            status_code=502,
+            content={
+                "response": fallback_message,
+                "status": "error",
+                "error": "Invalid response from car service"
+            }
+        )
+
+    if not isinstance(chat_response, dict):
+        chat_response = {"response": chat_response}
+
+    response_text = (
+        chat_response.get("response")
+        or chat_response.get("message")
+        or fallback_message
+    )
+
+    suggestions = chat_response.get("suggestions")
+    if suggestions is None:
+        suggestions = []
+    elif isinstance(suggestions, str):
+        suggestions = [suggestions]
+    else:
+        suggestions = list(suggestions)
+
+    context_payload = chat_response.get("context") or {}
+    if not isinstance(context_payload, dict):
+        context_payload = {"value": context_payload}
+
+    normalized_payload = {
+        "response": response_text,
+        "suggestions": suggestions,
+        "context": context_payload,
+        "status": "success"
+    }
+
+    session_id = chat_response.get("session_id")
+    if not session_id and isinstance(context_payload, dict):
+        session_id = context_payload.get("session_id")
+    if session_id:
+        normalized_payload["session_id"] = session_id
+
+    for key, value in chat_response.items():
+        if key in normalized_payload:
+            continue
+        normalized_payload[key] = value
+
+    return JSONResponse(content=normalized_payload)
 
 # ========== AUTH ENDPOINTS ==========
 @app.post("/api/auth/login", tags=["Auth"])

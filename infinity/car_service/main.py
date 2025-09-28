@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi import FastAPI, HTTPException, Query, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, Column, String, Integer, ForeignKey, Text, DateTime, func, Index, and_, JSON, DECIMAL, DATE, BOOLEAN
@@ -18,6 +18,8 @@ from pytz import timezone as pytz_timezone
 from fastapi_mcp import FastApiMCP
 import httpx
 import asyncio
+from copy import deepcopy
+from urllib.parse import urlencode
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -291,6 +293,112 @@ async def startup_event():
     logger.info("Car service starting up...")
     # The database engine is created on module load.
     # No need to initialize a separate pool.
+    try:
+        for route in app.routes:
+            methods = getattr(route, "methods", None)
+            path = getattr(route, "path", getattr(route, "path_format", ""))
+            logger.info(f"Route registered: path={path} methods={methods}")
+    except Exception as e:
+        logger.warning(f"Failed to enumerate routes: {e}")
+
+@app.get("/debug/routes")
+async def list_routes():
+    routes = []
+    for route in app.routes:
+        routes.append({
+            "path": getattr(route, "path", getattr(route, "path_format", "")),
+            "methods": list(getattr(route, "methods", [])),
+            "name": getattr(route, "name", None)
+        })
+    return {"routes": routes}
+
+@app.post("/mcp")
+async def mcp_post_bridge(request: Request) -> Response:
+    """
+    Bridge endpoint to support POST /mcp by forwarding to MCP message endpoint.
+    Some MCP clients POST to the base mount path. This forwards the request
+    to the underlying message endpoint so those clients continue to work.
+    """
+    try:
+        raw_body = await request.body()
+        headers = {
+            "content-type": request.headers.get("content-type", "application/json")
+        }
+        query_params = dict(request.query_params)
+
+        def normalize_session(value: Optional[str]) -> Optional[str]:
+            if not value:
+                return None
+            try:
+                return uuid.UUID(str(value)).hex
+            except Exception:
+                return None
+
+        session_id = normalize_session(query_params.get("session_id"))
+
+        try:
+            decoded_body = raw_body.decode("utf-8") if raw_body else ""
+            payload = json.loads(decoded_body) if decoded_body else {}
+
+            if not isinstance(payload, dict):
+                logger.debug("MCP POST payload is not a JSON object; wrapping into dict")
+                payload = {"messages": payload}
+
+            body_session = (
+                payload.get("session_id")
+                or payload.get("sessionId")
+                or payload.get("session")
+            )
+
+            if not session_id and body_session:
+                session_id = normalize_session(body_session)
+
+            if not session_id:
+                session_id = uuid.uuid4().hex
+                logger.info(
+                    "POST /mcp missing session identifier. Generated new session: %s",
+                    session_id,
+                )
+
+            payload["session_id"] = session_id
+            payload["sessionId"] = session_id
+            raw_body = json.dumps(payload).encode("utf-8")
+        except Exception as parse_error:
+            logger.warning(
+                f"Failed to process MCP POST body for session normalization: {parse_error}"
+            )
+            if not session_id:
+                session_id = uuid.uuid4().hex
+                logger.info(
+                    "POST /mcp had unreadable body. Injecting default session %s",
+                    session_id,
+                )
+            fallback_payload = {"session_id": session_id, "sessionId": session_id, "messages": []}
+            raw_body = json.dumps(fallback_payload).encode("utf-8")
+
+        query_params["session_id"] = session_id
+        target_url = "http://localhost:8007/mcp/messages/"
+        if query_params:
+            target_url = f"{target_url}?{urlencode(query_params)}"
+
+        logger.info(f"Bridging POST /mcp request to {target_url}")
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(target_url, content=raw_body, headers=headers)
+
+        # Return the response from the message endpoint directly to the original caller (N8N)
+        return Response(
+            content=resp.content,
+            status_code=resp.status_code,
+            headers=dict(resp.headers),
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to bridge POST /mcp request: {e}")
+        return Response(
+            content=json.dumps({"error": "mcp_bridge_failed"}),
+            status_code=502,
+        )
 
 @app.get("/health")
 async def health_check():
@@ -656,9 +764,18 @@ async def call_n8n_webhook(message: str, context: dict = None) -> dict:
             logger.warning("N8N webhook URL tidak dikonfigurasi")
             return None
             
+        context_data = deepcopy(context) if context else {}
+        session_id = (
+            context_data.get("session_id")
+            or context_data.get("user_id")
+            or f"session-{uuid.uuid4()}"
+        )
+        context_data.setdefault("session_id", session_id)
+
         payload = {
             "message": message,
-            "context": context or {},
+            "context": context_data,
+            "session_id": session_id,
             "timestamp": datetime.now().isoformat()
         }
         
@@ -668,6 +785,55 @@ async def call_n8n_webhook(message: str, context: dict = None) -> dict:
             response.raise_for_status()
             
             result = response.json()
+            if not isinstance(result, dict):
+                result = {"response": result}
+
+            result_body = result.get("response")
+            result_suggestions = result.get("suggestions")
+            result_context = result.get("context") or {}
+
+            if isinstance(result_body, list):
+                first_entry = None
+                for item in result_body:
+                    if isinstance(item, dict):
+                        first_entry = item
+                        break
+                if first_entry is None and result_body:
+                    first_entry = {"response": result_body[0]}
+
+                if first_entry:
+                    result_body = first_entry.get("response", result_body)
+                    if not result_suggestions:
+                        result_suggestions = first_entry.get("suggestions")
+                    nested_context = first_entry.get("context") or {}
+                    if isinstance(nested_context, dict):
+                        if not result_context:
+                            result_context = nested_context
+                        else:
+                            merged_context = dict(nested_context)
+                            merged_context.update(result_context)
+                            result_context = merged_context
+
+            if not isinstance(result_suggestions, list):
+                if result_suggestions is None:
+                    result_suggestions = []
+                elif isinstance(result_suggestions, str):
+                    result_suggestions = [result_suggestions]
+                else:
+                    result_suggestions = list(result_suggestions)
+
+            if not isinstance(result_context, dict):
+                result_context = {"value": result_context}
+
+            if context_data.get("user_id") and "user_id" not in result_context:
+                result_context["user_id"] = context_data["user_id"]
+            result_context.setdefault("session_id", session_id)
+
+            result["response"] = result_body
+            result["suggestions"] = result_suggestions
+            result["context"] = result_context
+            result.setdefault("session_id", session_id)
+
             logger.info(f"N8N webhook response: {result}")
             return result
             
@@ -754,10 +920,22 @@ async def chat_with_assistant(request: ChatRequest, db: Session = Depends(get_db
             
             if ai_response:
                 # Gunakan respons dari AI
+                response_context = ai_response.get("context") or {}
+                if not isinstance(response_context, dict):
+                    response_context = {"value": response_context}
+
+                response_context.setdefault("source", "n8n_ai")
+                if request.context and isinstance(request.context, dict):
+                    if request.context.get("user_id") and "user_id" not in response_context:
+                        response_context["user_id"] = request.context.get("user_id")
+
+                if ai_response.get("session_id") and "session_id" not in response_context:
+                    response_context["session_id"] = ai_response["session_id"]
+
                 return ChatResponse(
                     response=ai_response.get("response", ai_response.get("message", "AI response received")),
                     suggestions=ai_response.get("suggestions", ["Tell me more", "What else can you help with?"]),
-                    context=ai_response.get("context", {"source": "n8n_ai"})
+                    context=response_context
                 )
             else:
                 # Jika webhook gagal, gunakan fallback
@@ -780,5 +958,6 @@ if __name__ == "__main__":
     # Create tables if they don't exist (for local development)
     # In production, you might use Alembic for migrations
     Base.metadata.create_all(bind=engine)
-    uvicorn.run("main:app", host="0.0.0.0", port=8007, reload=True)
+    # Running without reloader for Docker healthcheck stability
+    uvicorn.run(app, host="0.0.0.0", port=8007)
     mcp.setup_server()
