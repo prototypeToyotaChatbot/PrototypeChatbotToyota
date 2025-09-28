@@ -270,14 +270,6 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-mcp = FastApiMCP(app, name="Car Service MCP",
-    description="MCP untuk layanan data mobil, rekomendasi, dan promosi.",
-    include_operations=[
-        "list cars", "list car variants", "get car recommendations", 
-        "compare variants", "list promotions", "get stock info"
-    ]
-)
-mcp.mount(mount_path="/mcp", transport="sse")
 jakarta_tz = pytz_timezone('Asia/Jakarta')
 
 # Database dependency
@@ -954,10 +946,22 @@ async def chat_with_assistant(request: ChatRequest, db: Session = Depends(get_db
             context={"error": str(e)}
         )
 
+
+mcp = FastApiMCP(app, name="Car Service MCP",
+    description="MCP untuk layanan data mobil, rekomendasi, dan promosi.",
+    include_operations=[
+        "list cars", "list car variants", "get car recommendations",
+        "compare variants", "list promotions", "get stock info"
+    ]
+)
+mcp.mount(mount_path="/mcp", transport="sse")
+
 if __name__ == "__main__":
     # Create tables if they don't exist (for local development)
     # In production, you might use Alembic for migrations
     Base.metadata.create_all(bind=engine)
+    # Ensure MCP routes are registered before serving
+    mcp.setup_server()
     # Running without reloader for Docker healthcheck stability
     uvicorn.run(app, host="0.0.0.0", port=8007)
-    mcp.setup_server()
+
