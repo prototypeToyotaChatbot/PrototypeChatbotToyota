@@ -18,7 +18,7 @@ x-n8n: &service-n8n
   networks: ['demo']
   environment:
     - DB_TYPE=postgresdb
-    - DB_POSTGRESDB_HOST=pgvector
+    - DB_POSTGRESDB_HOST=toyota-vector-store
     - DB_POSTGRESDB_USER=${POSTGRES_USER}
     - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
     - N8N_PROTOCOL=https
@@ -34,37 +34,37 @@ x-n8n: &service-n8n
   env_file:
     - .env
 
-x-ollama: &service-ollama
-  image: ollama/ollama:latest
-  container_name: ollama
-  networks: ['demo']
-  restart: unless-stopped
-  ports:
-    - 11434:11434
-  volumes:
-    - ollama_storage:/root/.ollama
-    - ./modelfile:/modelfile:ro  # Added shared modelfile directory as read-only
-
-x-init-ollama: &init-ollama
-  image: ollama/ollama:latest
-  networks: ['demo']
-  container_name: ollama-pull-llama
-  volumes:
-    - ./modelfile/cafe.modelfile:/cafe.modelfile   # dari folder `modelfile`
-    - ollama_storage:/root/.ollama
-    - ./modelfile:/modelfile
-  entrypoint: /bin/sh
-  environment:
-    - OLLAMA_HOST=host.docker.internal:11434
-  command:
-    - "-c"
-    - "sleep 3; ollama pull nomic-embed-text"
-
+# x-ollama: &service-ollama
+#   image: ollama/ollama:latest
+#   container_name: ollama
+#   networks: ['demo']
+#   restart: unless-stopped
+#   ports:
+#     - 11434:11434
+#   volumes:
+#     - ollama_storage:/root/.ollama
+#     - ./modelfile:/modelfile:ro  # Added shared modelfile directory as read-only
+#
+# x-init-ollama: &init-ollama
+#   image: ollama/ollama:latest
+#   networks: ['demo']
+#   container_name: ollama-pull-llama
+#   volumes:
+#     - ./modelfile/cafe.modelfile:/cafe.modelfile   # dari folder `modelfile`
+#     - ollama_storage:/root/.ollama
+#     - ./modelfile:/modelfile
+#   entrypoint: /bin/sh
+#   environment:
+#     - OLLAMA_HOST=host.docker.internal:11434
+#   command:
+#     - "-c"
+#     - "sleep 3; ollama pull nomic-embed-text"
+#
 services:
-  n8n-import:
+  toyota-workflow-importer:
     <<: *service-n8n
-    hostname: n8n-import
-    container_name: n8n-import
+    hostname: toyota-workflow-importer
+    container_name: toyota-workflow-importer
     entrypoint: /bin/sh
     command:
       - "-c"
@@ -72,13 +72,13 @@ services:
     volumes:
       - ./n8n/demo-data:/demo-data
     depends_on:
-      pgvector17:
+      toyota-vector-store:
         condition: service_healthy
 
-  n8n:
+  toyota-workflow:
     <<: *service-n8n
-    hostname: n8n
-    container_name: n8n
+    hostname: toyota-workflow
+    container_name: toyota-workflow
     restart: unless-stopped
     ports:
       - 5678:5678
@@ -87,111 +87,101 @@ services:
       - ./n8n/demo-data:/demo-data
       - ./shared:/data/shared
     depends_on:
-      pgvector17:
+      toyota-vector-store:
         condition: service_healthy
-      n8n-import:
+      toyota-workflow-importer:
         condition: service_completed_successfully
 
-  # qdrant:
-  #   image: qdrant/qdrant
-  #   hostname: qdrant
-  #   container_name: qdrant
-  #   networks: ['demo']
-  #   restart: unless-stopped
-  #   ports:
-  #     - 6333:6333
-  #   volumes:
-  #     - qdrant_storage:/qdrant/storage
 
-  ollama-cpu:
-    profiles: ["cpu"]
-    <<: *service-ollama
-
-  ollama-gpu:
-    profiles: ["gpu-nvidia"]
-    <<: *service-ollama
-    networks: ['demo', 'my_shared_network']
-    environment:
-      - OLLAMA_CONTEXT_LENGTH=5000
-      - CUDA_VISIBLE_DEVICES=0
+#   ollama-cpu:
+#     profiles: ["cpu"]
+#     <<: *service-ollama
+#
+#   ollama-gpu:
+#     profiles: ["gpu-nvidia"]
+#     <<: *service-ollama
+#     networks: ['demo', 'my_shared_network']
+#     environment:
+#       - OLLAMA_CONTEXT_LENGTH=5000
+#       - CUDA_VISIBLE_DEVICES=0
       # - OLLAMA_NUM_PARALLEL=10
       # - OLLAMA_MAX_LOADED_MODELS=2
       # - OLLAMA_FLASH_ATTENTION=true
-      - OLLAMA_KEEP_ALIVE=12h
+#       - OLLAMA_KEEP_ALIVE=12h
       # - OLLAMA_NEW_ENGINE=true
       # - OLLAMA_MULTIUSER_CACHE=true
-      - OLLAMA_DEBUG=false
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
-  ollama-gpu-amd:
-    profiles: ["gpu-amd"]
-    <<: *service-ollama
-    image: ollama/ollama:rocm
-    devices:
-      - "/dev/kfd"
-      - "/dev/dri"
-
-  ollama-pull-llama-cpu:
-    profiles: ["cpu"]
-    <<: *init-ollama
-    depends_on:
-      - ollama-cpu
-
-  ollama-pull-llama-gpu:
-    profiles: ["gpu-nvidia"]
-    <<: *init-ollama
-    depends_on:
-      - ollama-gpu
-
-  ollama-pull-llama-gpu-amd:
-    profiles: [gpu-amd]
-    <<: *init-ollama
-    image: ollama/ollama:rocm
-    depends_on:
-     - ollama-gpu-amd
-
-  ngrok:
+#       - OLLAMA_DEBUG=false
+#     deploy:
+#       resources:
+#         reservations:
+#           devices:
+#             - driver: nvidia
+#               count: 1
+#               capabilities: [gpu]
+#
+#   ollama-gpu-amd:
+#     profiles: ["gpu-amd"]
+#     <<: *service-ollama
+#     image: ollama/ollama:rocm
+#     devices:
+#       - "/dev/kfd"
+#       - "/dev/dri"
+#
+#   ollama-pull-llama-cpu:
+#     profiles: ["cpu"]
+#     <<: *init-ollama
+#     depends_on:
+#       - ollama-cpu
+#
+#   ollama-pull-llama-gpu:
+#     profiles: ["gpu-nvidia"]
+#     <<: *init-ollama
+#     depends_on:
+#       - ollama-gpu
+#
+#   ollama-pull-llama-gpu-amd:
+#     profiles: [gpu-amd]
+#     <<: *init-ollama
+#     image: ollama/ollama:rocm
+#     depends_on:
+#      - ollama-gpu-amd
+#
+  toyota-tunnel:
     image: ngrok/ngrok:latest
-    container_name: ngrok
+    container_name: toyota-tunnel
     restart: unless-stopped
     environment:
       - NGROK_AUTHTOKEN=${NG_CRE}
-    command: http --domain=${NG_URL} n8n:5678
-    network_mode: "service:n8n"
+    command: http --domain=${NG_URL} toyota-workflow:5678
+    network_mode: "service:toyota-workflow"
     depends_on:
-      n8n:
+      toyota-workflow:
         condition: service_started
 
-  infinity-cafe-model:
-    image: ollama/ollama:latest
-    networks: ['demo']
-    container_name: infinity-cafe-model
-    depends_on:
-      n8n:
-        condition: service_started
-    volumes:
-      - ollama_storage:/root/.ollama
-      - ./modelfile:/modelfile
-    entrypoint: /bin/sh
-    environment:
-    - OLLAMA_HOST=host.docker.internal:11434
-    command:
-      - "-c"
-      - "sleep 3; echo 'Creating infinityCafe Model'; ollama create infinityCafe -f /modelfile/cafe.modelfile"
-
+#   toyota-model-runner:
+#     image: ollama/ollama:latest
+#     networks: ['demo']
+#     container_name: toyota-model-runner
+#     depends_on:
+#       toyota-workflow:
+#         condition: service_started
+#     volumes:
+#       - ollama_storage:/root/.ollama
+#       - ./modelfile:/modelfile
+#     entrypoint: /bin/sh
+#     environment:
+#     - OLLAMA_HOST=host.docker.internal:11434
+#     command:
+#       - "-c"
+#       - "sleep 3; echo 'Creating infinityCafe Model'; ollama create infinityCafe -f /modelfile/cafe.modelfile"
+#
   pgadmin:
     image: dpage/pgadmin4
     networks: ['demo']
     hostname: pgadmin
-    container_name: pgadmin-container
+    container_name: toyota-pgadmin
     depends_on:
-      pgvector17:
+      toyota-vector-store:
         condition: service_healthy
     ports:
       - "5050:80"
@@ -200,11 +190,11 @@ services:
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     restart: unless-stopped
 
-  pgvector17:
+  toyota-vector-store:
     image: pgvector/pgvector:pg17
     networks: ['demo']
-    hostname: pgvector
-    container_name: pgvector
+    hostname: toyota-vector-store
+    container_name: toyota-vector-store
     ports:
      - 5555:5432
     restart: always
@@ -217,7 +207,7 @@ services:
      - pgvector_storage:/var/lib/postgresql/data
      - ./initdb:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -h pgvector -U ${POSTGRES_USER} -d postgres']
+      test: ['CMD-SHELL', 'pg_isready -h toyota-vector-store -U ${POSTGRES_USER} -d postgres']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -230,11 +220,12 @@ services:
     #   psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -tc \"SELECT 1 FROM pg_database WHERE datname = 'n8n2'\" |
     #   grep -q 1 || psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -c 'CREATE DATABASE n8n2'"
 
-  initdb:
+  toyota-db-init:
     image: pgvector/pgvector:pg17
+    container_name: toyota-db-init
     networks: ['demo']
     depends_on:
-      pgvector17:
+      toyota-vector-store:
         condition: service_healthy
     volumes:
       - ./initdb:/initdb
@@ -283,17 +274,17 @@ services:
       - POSTGRES_HOST_AUTH_METHOD=trust
 
 
-  user_service:
+  toyota-user-service:
     networks: ['demo', 'my_shared_network']
-    hostname: user_service
+    hostname: toyota-user-service
     build:
       context: ./infinity/ 
       dockerfile: user_service/Dockerfile
-    container_name: user_service
+    container_name: toyota-user-service
     depends_on:
-      pgvector17:
+      toyota-vector-store:
         condition: service_healthy
-      n8n-import:
+      toyota-workflow-importer:
         condition: service_completed_successfully
     env_file:
       - .env
@@ -302,7 +293,7 @@ services:
     extra_hosts:
       - "ollama:host-gateway"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://user_service:8005/health"]
+      test: ["CMD", "curl", "-f", "http://toyota-user-service:8005/health"]
       interval: 5s
       timeout: 5s
       retries: 3
@@ -315,9 +306,9 @@ services:
       dockerfile: car_service/Dockerfile
     container_name: car_service
     depends_on:
-      pgvector17:
+      toyota-vector-store:
         condition: service_healthy
-      n8n-import:
+      toyota-workflow-importer:
         condition: service_completed_successfully
     env_file:
       - .env
@@ -331,25 +322,10 @@ services:
       timeout: 5s
       retries: 3
 
-
-  # kitchen_dashboard_pwa:
-  #   build:
-  #     context: ./frontend/
-  #     dockerfile: Dockerfile
-  #   container_name: kitchen_dashboard_pwa
-  #   hostname: kitchen_dashboard_pwa
-  #   networks: ['demo']
-  #   ports:
-  #     - "8080:8080"
-  #   # depends_on:
-  #   #   - kitchen_service
-  #   extra_hosts:
-  #     - "ollama:host-gateway"
-
   frontend:
     build:
       context: ./frontend
-    container_name: infinity-frontend
+    container_name: toyota-frontend
     hostname: frontend
     networks: ['demo']
     ports:
@@ -357,7 +333,7 @@ services:
     extra_hosts:
       - "ollama:host-gateway"
     depends_on:
-      gateway:
+      toyota-gateway:
         condition: service_started
       
   # qwenagent:
@@ -387,145 +363,20 @@ services:
   #     # timeout: 5s
   #     # retries: 0
 
-  gateway:
+  toyota-gateway:
     networks: ['demo']
-    hostname: gateway
+    hostname: toyota-gateway
+    container_name: toyota-gateway
     build:
       context: .
       dockerfile: gateway/Dockerfile
     ports:
       - "2323:2323"
     depends_on:
-      user_service:
+      toyota-user-service:
         condition: service_started
       car_service:
         condition: service_started
     env_file:
       - .env
-
-  # seed_data:
-  #   networks: ['demo']
-  #   build:
-  #     context: .
-  #     dockerfile: seed.Dockerfile
-  #   environment:
-  #     - DATABASE_URL=${DATABASE_URL}
-  #   depends_on:
-  #     n8n:
-  #       condition: service_started
-
-
-  # gateway:
-  #   hostname: gateway
-  #   networks: ['demo']
-  #   build:
-  #     context: .
-  #     dockerfile: gateway/Dockerfile
-  #   ports:
-  #     - "2323:2323"
-  #   volumes:
-  #     - ./gateway/gateway.py:/app/gateway.py  # 🔥 mount file langsung
-  #   env_file:
-  #     - .env
-  #   depends_on:
-  #     - menu_service
-  #     - order_service
-
-
-  # fastmcp_server:
-  #   networks: ['demo']
-  #   hostname: fastmcp_server
-  #   build:
-  #     context: ./fastMCP_server/
-  #     dockerfile: Dockerfile
-  #   container_name: fastmcp_server
-    # depends_on:
-    #   menu_service:
-    #     condition: service_started
-    #   order_service:
-    #     condition: service_started
-    #   kitchen_service:
-    #     condition: service_started
-    # env_file:
-    #   - .env
-    # ports:
-    #   - "2323:2323"
-    # extra_hosts:
-    #   - "host.docker.internal:host-gateway"
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost:2323/health"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 5
-
-  # mcp_inspector:
-  #   build:
-  #     context: ./mcp_inspector/
-  #     dockerfile: Dockerfile
-  #   container_name: mcp_inspector
-  #   ports:
-  #     - "3000:3000"  # Ganti jika inspector kamu pakai port berbeda
-  #   networks: ['demo']
-
-  
-  # supergateway:
-  #   image: supercorp/supergateway
-  #   ports:
-  #     - "23231:23231"
-  #   volumes:
-  #     - ${GATE_FOLDER}:/supergateFolder
-  #   command: >
-  #     --stdio "npx -y @modelcontextprotocol/server-filesystem /supergateFolder"
-  #     --baseUrl http://fastmcp_server:${HOST_PORT}
-  #     --ssePath /sse
-  #     --messagePath /message
-  #   stdin_open: true
-  #   tty: true
-  #   environment:
-  #     - NODE_ENV=production
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://fastmcp_server:${HOST_PORT}/sse"]
-    #   interval: 10s
-    #   timeout: 5s
-    #   retries: 5
-    #   start_period: 5s
-    # restart: always
-    # depends_on:
-    #   fastmcp_server:
-    #     condition: service_started
-
-#      --baseUrl http://fastmcp_server:${HOST_PORT}
-#      --port ${CONTAINER_PORT}
-
-  # mindsdb:
-  #   networks: ['demo']
-  #   hostname: mindsdb
-  #   image: mindsdb/mindsdb
-  #   container_name: mindsdb_container
-  #   ports:
-  #     - "47334:47334"  # HTTP API
-  #     - "47335:47335"  # MySQL API
-  #     - "47336:47336"  # MongoDB API
-  #     - "55432:55432"  # PostgreSQL API
-  #   environment:
-  #     MINDSDB_APIS: "http,mysql,mongodb,postgres"
-  #   restart: unless-stopped
-
-#  postgres:
-#    image: postgres:16-alpine
-#    #image: pgvector/pgvector:pg17
-#    hostname: postgres
-#    networks: ['demo']
-#    restart: unless-stopped
-#    environment:
-#      - POSTGRES_USER
-#      - POSTGRES_PASSWORD
-#      - POSTGRES_DB
-#    volumes:
-#      - postgres_storage:/var/lib/postgresql/data
-#    healthcheck:
-#      test: ['CMD-SHELL', 'pg_isready -h localhost -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
-#      interval: 5s
-#      timeout: 5s
-#      retries: 10
   

@@ -25,7 +25,7 @@ app.add_middleware(
 )
 
 # Base URLs for microservices
-USER_SERVICE_URL = "http://user_service:8005"
+USER_SERVICE_URL = "http://toyota-user-service:8005"
 CAR_SERVICE_URL = "http://car_service:8007"
 
 @app.get("/health", tags=["Gateway"])

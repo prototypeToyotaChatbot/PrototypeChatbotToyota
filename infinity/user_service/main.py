@@ -121,7 +121,7 @@ def get_current_user(token: str, db: Session):
 @app.get("/health", tags=["Utility"])
 def health_check():
     """Endpoint untuk cek status service."""
-    return {"status": "ok", "service": "user_service"}
+    return {"status": "ok", "service": "toyota-user-service"}
 
 @app.post("/auth/verify_token", summary="Verifikasi JWT Token", tags=["Authentication"])
 def verify_token(authorization: str = Header(None), db: Session = Depends(get_db)):

@@ -1,2 +1,0 @@
-qwen-agent[gui,rag,code_interpreter,mcp]
-flask
