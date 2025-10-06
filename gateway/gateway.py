@@ -1,14 +1,14 @@
 # gateway_service.py
 from fastapi import FastAPI, Request, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import JSONResponse
 import httpx
 from typing import Optional, Dict, Any
 import logging
 
 app = FastAPI(
     title="Infinity Gateway", 
-    description="Gateway untuk routing requests ke user service", 
+    description="Gateway untuk routing requests ke layanan internal", 
     version="1.0"
 )
 
@@ -29,20 +29,16 @@ def _to_optional_str(value: Any) -> Optional[str]:
 
 
 def build_chat_envelope(context: Any, message: str) -> Dict[str, Optional[str]]:
-    user_id: Optional[str] = None
     session_id: Optional[str] = None
 
     if isinstance(context, dict):
-        user_id = _to_optional_str(context.get('user_id'))
-        session_candidate = context.get('session_id')
-        session_id = _to_optional_str(session_candidate) or user_id
+        session_candidate = context.get('session_id') or context.get('session-id')
+        session_id = _to_optional_str(session_candidate)
 
     return {
-        'user_id': user_id,
         'session-id': session_id,
-        'output': message
+        'output': message,
     }
-
 
 
 def normalize_chat_response(
@@ -50,46 +46,68 @@ def normalize_chat_response(
     fallback: Dict[str, Optional[str]],
     default_output: str
 ) -> Dict[str, Optional[str]]:
-    normalized = {
-        'user_id': fallback.get('user_id'),
+    normalized: Dict[str, Optional[str]] = {
         'session-id': fallback.get('session-id'),
-        'output': default_output
+        'output': default_output,
     }
 
     if isinstance(payload, dict):
-        user_candidate = _to_optional_str(payload.get('user_id'))
-        if user_candidate:
-            normalized['user_id'] = user_candidate
-
-        session_candidate = _to_optional_str(payload.get('session-id') or payload.get('session_id'))
+        session_candidate = _to_optional_str(payload.get('session_id') or payload.get('session-id'))
         if session_candidate:
             normalized['session-id'] = session_candidate
 
-        context_data = payload.get('context')
-        if isinstance(context_data, dict):
-            context_user = _to_optional_str(context_data.get('user_id'))
-            if context_user and not normalized['user_id']:
-                normalized['user_id'] = context_user
-            context_session = _to_optional_str(context_data.get('session_id'))
-            if context_session:
-                normalized['session-id'] = context_session
+        output_candidate: Any = (
+            payload.get('output')
+            or payload.get('response')
+            or payload.get('message')
+        )
 
-        output_candidate = payload.get('output')
-        if output_candidate is None:
-            output_candidate = payload.get('response') or payload.get('message')
+        if isinstance(output_candidate, list):
+            first_entry = next(
+                (item for item in output_candidate if isinstance(item, dict)),
+                None,
+            )
+            if first_entry:
+                output_candidate = (
+                    first_entry.get('output')
+                    or first_entry.get('response')
+                    or first_entry.get('message')
+                )
+                if not normalized['session-id']:
+                    normalized['session-id'] = _to_optional_str(
+                        first_entry.get('session_id')
+                        or first_entry.get('session-id')
+                        or (first_entry.get('context') or {}).get('session_id')
+                    )
+            elif output_candidate:
+                output_candidate = output_candidate[0]
+
+        if isinstance(output_candidate, dict):
+            output_candidate = (
+                output_candidate.get('output')
+                or output_candidate.get('response')
+                or output_candidate.get('message')
+            )
+
+        context_payload = payload.get('context')
+        if isinstance(context_payload, dict) and not normalized['session-id']:
+            normalized['session-id'] = _to_optional_str(
+                context_payload.get('session_id')
+                or context_payload.get('session-id')
+            )
 
         if isinstance(output_candidate, str):
             normalized['output'] = output_candidate
         elif output_candidate is not None:
             normalized['output'] = _to_optional_str(output_candidate) or default_output
+        else:
+            normalized['output'] = default_output
+
     elif payload is not None:
         normalized['output'] = _to_optional_str(payload) or default_output
 
     if not normalized['output'] or not normalized['output'].strip():
         normalized['output'] = default_output
-
-    if normalized['user_id'] is None:
-        normalized['user_id'] = fallback.get('user_id')
 
     if normalized['session-id'] is None:
         normalized['session-id'] = fallback.get('session-id')
@@ -107,36 +125,11 @@ app.add_middleware(
 )
 
 # Base URLs for microservices
-USER_SERVICE_URL = "http://toyota-user-service:8005"
 CAR_SERVICE_URL = "http://car_service:8007"
 
 @app.get("/health", tags=["Gateway"])
 def health_check():
     return {"status": "ok", "gateway": "Infinity Gateway"}
-
-# ========== USER ENDPOINTS ==========
-@app.get("/users", tags=["User"])
-async def get_users():
-    """Ambil daftar semua user"""
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{USER_SERVICE_URL}/users")
-            response.raise_for_status()
-            return response.json()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch users: {str(e)}")
-
-@app.post("/users", tags=["User"])
-async def create_user(request: Request):
-    """Buat user baru"""
-    try:
-        body = await request.json()
-        async with httpx.AsyncClient() as client:
-            response = await client.post(f"{USER_SERVICE_URL}/users", json=body)
-            response.raise_for_status()
-            return response.json()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create user: {str(e)}")
 
 # ========== CAR ENDPOINTS ==========
 @app.get("/cars", tags=["Car"])
@@ -365,62 +358,3 @@ async def api_chat_with_assistant(request: Request):
     )
 
     return JSONResponse(content=normalized_payload)
-@app.post("/api/auth/login", tags=["Auth"])
-async def login(request: Request):
-    """Login endpoint untuk frontend PWA"""
-    try:
-        body = await request.json()
-        # Simulasi autentikasi sederhana
-        email = body.get("email")
-        password = body.get("password")
-        
-        if email and password:
-            # Di implementasi nyata, validasi dengan database
-            return {
-                "token": "dummy_jwt_token_for_demo",
-                "user": {
-                    "email": email,
-                    "name": "Demo User"
-                },
-                "status": "success"
-            }
-        else:
-            raise HTTPException(status_code=400, detail="Email and password required")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
-
-@app.post("/api/auth/register", tags=["Auth"])
-async def register(request: Request):
-    """Register endpoint untuk frontend PWA"""
-    try:
-        body = await request.json()
-        name = body.get("name")
-        email = body.get("email")
-        password = body.get("password")
-        
-        if name and email and password:
-            # Di implementasi nyata, simpan ke database
-            return {
-                "message": "Account created successfully",
-                "status": "success"
-            }
-        else:
-            raise HTTPException(status_code=400, detail="Name, email and password required")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
-
-@app.api_route("/mcp/cars", methods=["POST"])
-async def proxy_cars(request: Request):
-    """Proxy untuk MCP car_service"""
-    return await forward(request, f"{CAR_SERVICE_URL}/mcp")
-    
-# Util fungsi forwarding request
-async def forward(request: Request, target_url: str):
-    async with httpx.AsyncClient() as client:
-        response = await client.request(
-            method=request.method,
-            url=target_url,
-            headers=dict(request.headers),
-            content=await request.body()
-        )
-        return response.json()

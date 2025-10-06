@@ -274,30 +274,6 @@ services:
       - POSTGRES_HOST_AUTH_METHOD=trust
 
 
-  toyota-user-service:
-    networks: ['demo', 'my_shared_network']
-    hostname: toyota-user-service
-    build:
-      context: ./infinity/ 
-      dockerfile: user_service/Dockerfile
-    container_name: toyota-user-service
-    depends_on:
-      toyota-vector-store:
-        condition: service_healthy
-      toyota-workflow-importer:
-        condition: service_completed_successfully
-    env_file:
-      - .env
-    ports:
-      - "8005:8005" 
-    extra_hosts:
-      - "ollama:host-gateway"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://toyota-user-service:8005/health"]
-      interval: 5s
-      timeout: 5s
-      retries: 3
-
   car_service:
     networks: ['demo', 'my_shared_network']
     hostname: car_service
@@ -375,8 +351,6 @@ services:
     ports:
       - "2323:2323"
     depends_on:
-      toyota-user-service:
-        condition: service_started
       car_service:
         condition: service_started
     env_file:

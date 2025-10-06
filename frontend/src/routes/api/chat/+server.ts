@@ -6,7 +6,6 @@ const GATEWAY_URL = env.GATEWAY_URL ?? 'http://localhost:2323';
 const DEFAULT_ERROR_MESSAGE = "I'm experiencing some technical difficulties. Please try again later.";
 
 type ChatEnvelope = {
-	user_id: string | null;
 	'session-id': string | null;
 	output: string;
 };
@@ -38,7 +37,6 @@ const normalizePayload = (
 
 export const POST: RequestHandler = async ({ request }) => {
 	let fallbackEnvelope: ChatEnvelope = {
-		user_id: null,
 		'session-id': null,
 		output: DEFAULT_ERROR_MESSAGE
 	};
@@ -51,7 +49,6 @@ export const POST: RequestHandler = async ({ request }) => {
 				: {};
 
 		fallbackEnvelope = {
-			user_id: context.user_id ?? null,
 			'session-id': context.session_id ?? null,
 			output: DEFAULT_ERROR_MESSAGE
 		};

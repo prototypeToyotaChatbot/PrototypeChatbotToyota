@@ -68,7 +68,6 @@ User Input → Frontend → Gateway → Car Service → N8N Webhook → AI Proce
 {
   "message": "User input message",
   "context": {
-    "user_id": "optional",
     "session_id": "optional"
   },
   "timestamp": "2025-09-27T10:30:00"
@@ -78,12 +77,8 @@ User Input → Frontend → Gateway → Car Service → N8N Webhook → AI Proce
 ### **Expected Response dari N8N:**
 ```json
 {
-  "response": "AI generated response",
-  "suggestions": ["Follow up 1", "Follow up 2"],
-  "context": {
-    "source": "ai",
-    "confidence": 0.95
-  }
+  "output": "AI generated response",
+  "session_id": "optional"
 }
 ```
 

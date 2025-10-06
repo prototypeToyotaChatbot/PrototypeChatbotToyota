@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import create_engine, Column, String, Integer, ForeignKey, Text, DateTime, func, Index, and_, JSON, DECIMAL, DATE, BOOLEAN
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
@@ -246,21 +246,23 @@ class ChatRequest(BaseModel):
     context: Optional[Dict[str, Any]] = None
 
 class ChatResponse(BaseModel):
-    user_id: Optional[str] = Field(default=None, alias="user_id")
-    session_id: Optional[str] = Field(default=None, alias="session-id")
+    session_id: str = Field(alias="session-id", validation_alias="session-id", serialization_alias="session-id")
     output: str
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
-def prepare_chat_context(raw_context: Optional[Dict[str, Any]]) -> Tuple[Dict[str, Any], Optional[str], str]:
+def prepare_chat_context(raw_context: Optional[Dict[str, Any]]) -> Tuple[Dict[str, Any], str]:
     """Normalize incoming chat context and guarantee a session identifier."""
     base_context = deepcopy(raw_context) if isinstance(raw_context, dict) else {}
-    user_id = base_context.get("user_id")
-    session_id = base_context.get("session_id") or user_id or f"session-{uuid.uuid4()}"
+    session_id = (
+        base_context.get("session_id")
+        or base_context.get("session-id")
+        or f"session-{uuid.uuid4()}"
+    )
+    base_context.pop("user_id", None)
     base_context.setdefault("session_id", session_id)
-    return base_context, user_id, session_id
+    return base_context, session_id
 
 
 # =================================================================
@@ -768,13 +770,14 @@ async def call_n8n_webhook(message: str, context: dict = None) -> dict:
         if not webhook_url:
             logger.warning("N8N webhook URL tidak dikonfigurasi")
             return None
-            
+
         context_data = deepcopy(context) if context else {}
         session_id = (
             context_data.get("session_id")
-            or context_data.get("user_id")
+            or context_data.get("session-id")
             or f"session-{uuid.uuid4()}"
         )
+        context_data.pop("user_id", None)
         context_data.setdefault("session_id", session_id)
 
         payload = {
@@ -783,144 +786,71 @@ async def call_n8n_webhook(message: str, context: dict = None) -> dict:
             "session_id": session_id,
             "timestamp": datetime.now().isoformat()
         }
-        
+
         timeout = CHATBOT_CONFIG["webhook_timeout"]
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(webhook_url, json=payload)
             response.raise_for_status()
-            
+
             result = response.json()
-
             if not isinstance(result, dict):
-
                 result = {"output": result}
 
-
-
-            result_context = result.get("context") if isinstance(result.get("context"), dict) else {}
-
             output_candidate = (
-
                 result.get("output")
-
                 or result.get("response")
-
                 or result.get("message")
-
             )
-
-
+            result_session_id = (
+                result.get("session_id")
+                or result.get("session-id")
+            )
 
             if isinstance(output_candidate, list):
-
-                first_entry = next((
-
-                    item for item in output_candidate
-
-                    if isinstance(item, dict)
-
-                    and (item.get("output") or item.get("response") or item.get("message"))
-
-                ), None)
-
+                first_entry = next(
+                    (item for item in output_candidate if isinstance(item, dict)),
+                    None,
+                )
                 if first_entry:
-
                     output_candidate = (
-
                         first_entry.get("output")
-
                         or first_entry.get("response")
-
                         or first_entry.get("message")
-
                     )
-
-                    nested_context = first_entry.get("context")
-
-                    if isinstance(nested_context, dict):
-
-                        merged_context = dict(result_context)
-
-                        merged_context.update(nested_context)
-
-                        result_context = merged_context
-
+                    if not result_session_id:
+                        result_session_id = (
+                            first_entry.get("session_id")
+                            or first_entry.get("session-id")
+                            or (first_entry.get("context") or {}).get("session_id")
+                        )
                 elif output_candidate:
-
                     output_candidate = output_candidate[0]
 
-
-
             if isinstance(output_candidate, dict):
-
                 output_candidate = (
-
                     output_candidate.get("output")
-
                     or output_candidate.get("response")
-
                     or output_candidate.get("message")
-
                     or json.dumps(output_candidate)
-
                 )
 
-
-
-            if not isinstance(result_context, dict):
-
-                result_context = {}
-
-
+            context_payload = result.get("context")
+            if isinstance(context_payload, dict) and not result_session_id:
+                result_session_id = context_payload.get("session_id") or context_payload.get("session-id")
 
             if not isinstance(output_candidate, str):
-
                 try:
-
                     output_candidate = json.dumps(output_candidate)
-
                 except (TypeError, ValueError):
-
                     output_candidate = str(output_candidate)
 
-
-
-            response_user_id = (
-
-                result.get("user_id")
-
-                or result_context.get("user_id")
-
-                or context_data.get("user_id")
-
-            )
-
-            response_session_id = (
-
-                result.get("session_id")
-
-                or result_context.get("session_id")
-
-                or session_id
-
-            )
-
-
-
             result_payload = {
-
                 "output": output_candidate or CHATBOT_CONFIG["fallback_message"],
-
-                "user_id": response_user_id,
-
-                "session_id": response_session_id,
-
+                "session_id": result_session_id or session_id,
             }
-
             logger.info(f"N8N webhook response: {result_payload}")
-
             return result_payload
-            
+
     except httpx.TimeoutException:
         logger.error(f"N8N webhook timeout after {timeout}s")
         return None
@@ -928,15 +858,15 @@ async def call_n8n_webhook(message: str, context: dict = None) -> dict:
         logger.error(f"Error calling N8N webhook: {e}")
         return None
 
-def get_welcome_response(user_id: Optional[str], session_id: str) -> ChatResponse:
+
+def get_welcome_response(session_id: str) -> ChatResponse:
     """Mendapatkan respons selamat datang"""
     return ChatResponse(
-        user_id=user_id,
         session_id=session_id,
         output=CHATBOT_CONFIG["welcome_message"]
     )
 
-async def get_fallback_response(message: str, db: Session, user_id: Optional[str], session_id: str) -> ChatResponse:
+async def get_fallback_response(message: str, db: Session, session_id: str) -> ChatResponse:
     """Mendapatkan respons fallback dengan informasi dasar"""
     try:
         # Berikan beberapa informasi berguna berdasarkan kata kunci
@@ -958,39 +888,33 @@ async def get_fallback_response(message: str, db: Session, user_id: Optional[str
             response_text = CHATBOT_CONFIG["fallback_message"]
 
         return ChatResponse(
-            user_id=user_id,
             session_id=session_id,
             output=response_text
         )
     except Exception as e:
         logger.error(f"Error in fallback response: {e}")
         return ChatResponse(
-            user_id=user_id,
             session_id=session_id,
             output=CHATBOT_CONFIG["error_message"]
         )
 
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat_with_assistant(request: ChatRequest, db: Session = Depends(get_db)):
     """Chat dengan assistant untuk konsultasi mobil"""
-    context_data: Dict[str, Any] = {}
-    user_id: Optional[str] = None
     session_id: str = f"session-{uuid.uuid4()}"
-    effective_user_id: Optional[str] = None
     try:
         message = request.message.strip()
-        context_data, user_id, session_id = prepare_chat_context(request.context)
-        effective_user_id = user_id or context_data.get("user_id")
+        context_data, session_id = prepare_chat_context(request.context)
 
         if any(word in message.lower() for word in ["hello", "hi", "halo", "hai", "start"]):
-            return get_welcome_response(effective_user_id, session_id)
+            return get_welcome_response(session_id)
 
         if CHATBOT_CONFIG["use_ai_processing"] and CHATBOT_CONFIG["n8n_webhook_url"]:
             logger.info(f"Sending message to N8N webhook: {message}")
             ai_response = await call_n8n_webhook(message, context_data)
 
             if ai_response:
-                response_user_id = ai_response.get("user_id") or effective_user_id
                 response_session_id = ai_response.get("session_id") or session_id
                 output_text = (
                     ai_response.get("output")
@@ -999,24 +923,24 @@ async def chat_with_assistant(request: ChatRequest, db: Session = Depends(get_db
                     or CHATBOT_CONFIG["fallback_message"]
                 )
                 return ChatResponse(
-                    user_id=response_user_id,
                     session_id=response_session_id,
                     output=output_text
                 )
 
             logger.warning("N8N webhook failed, using fallback response")
-            return await get_fallback_response(message, db, effective_user_id, session_id)
+            return await get_fallback_response(message, db, session_id)
 
         logger.info(f"AI processing disabled or webhook missing, using fallback for: {message}")
-        return await get_fallback_response(message, db, effective_user_id, session_id)
+        return await get_fallback_response(message, db, session_id)
 
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}")
         return ChatResponse(
-            user_id=effective_user_id or user_id,
             session_id=session_id,
             output=CHATBOT_CONFIG["error_message"],
         )
+
+
 mcp = FastApiMCP(app, name="Car Service MCP",
     description="MCP untuk layanan data mobil, rekomendasi, dan promosi.",
     include_operations=[

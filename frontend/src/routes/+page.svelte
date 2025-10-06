@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 
-	const USER_STORAGE_KEY = 'carbot:user-id';
-
 	const generateId = () =>
 		typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
 			? crypto.randomUUID()
@@ -12,28 +10,16 @@
 	let inputMessage = '';
 	let isLoading = false;
 	let chatContainer: HTMLDivElement;
-	let userId = '';
 	let sessionId = generateId();
 	let sessionStartedAt = new Date().toISOString();
 
 	onMount(() => {
 		if (typeof window !== 'undefined') {
-			const storedUserId = localStorage.getItem(USER_STORAGE_KEY);
-			if (storedUserId) {
-				userId = storedUserId;
-			} else {
-				userId = generateId();
-				localStorage.setItem(USER_STORAGE_KEY, userId);
-			}
-
-			// Reset session info on every fresh page load
 			sessionId = generateId();
 			sessionStartedAt = new Date().toISOString();
 		}
 
-		// Add welcome message
 		messages = [
-			...messages,
 			{
 				id: Date.now(),
 				text: "Hello! I'm your chatbot assistant. How can I help you today?",
@@ -42,26 +28,27 @@
 			}
 		];
 	});
-	
+
 	async function sendMessage() {
 		if (!inputMessage.trim() || isLoading) return;
-		
+
 		const userMessage = inputMessage.trim();
 		inputMessage = '';
-		
-		// Add user message
-		messages = [...messages, {
-			id: Date.now(),
-			text: userMessage,
-			isUser: true,
-			timestamp: new Date()
-		}];
-		
+
+		messages = [
+			...messages,
+			{
+				id: Date.now(),
+				text: userMessage,
+				isUser: true,
+				timestamp: new Date()
+			}
+		];
+
 		isLoading = true;
-		
+
 		try {
 			const context = {
-				user_id: userId || generateId(),
 				session_id: sessionId,
 				session_started_at: sessionStartedAt,
 				locale: typeof navigator !== 'undefined' ? navigator.language : undefined,
@@ -70,6 +57,7 @@
 						? Intl.DateTimeFormat().resolvedOptions().timeZone
 						: undefined
 			};
+
 			const response = await fetch('/api/chat', {
 				method: 'POST',
 				headers: {
@@ -80,6 +68,7 @@
 					context
 				})
 			});
+
 			let botResponse = '';
 			let payload: any = null;
 			try {
@@ -87,44 +76,46 @@
 			} catch (parseError) {
 				payload = null;
 			}
-			if (payload?.user_id) {
-				userId = payload.user_id;
-				if (typeof window !== 'undefined') {
-					localStorage.setItem(USER_STORAGE_KEY, userId);
-				}
-			}
+
 			const returnedSessionId = payload?.['session-id'] ?? payload?.session_id;
 			if (returnedSessionId) {
 				sessionId = returnedSessionId;
 			}
+
 			const extractOutput = (data: any) => {
 				const outputValue = typeof data?.output === 'string' ? data.output : undefined;
 				return outputValue && outputValue.trim().length > 0 ? outputValue : undefined;
 			};
+
 			if (response.ok && payload) {
 				botResponse = extractOutput(payload) ?? 'I received your message: ' + userMessage;
 			} else {
 				botResponse = extractOutput(payload) ?? "Sorry, I'm having trouble connecting right now. Please try again later.";
 			}
-						// Add bot response
-			messages = [...messages, {
-				id: Date.now() + 1,
-				text: botResponse,
-				isUser: false,
-				timestamp: new Date()
-			}];
+
+			messages = [
+				...messages,
+				{
+					id: Date.now() + 1,
+					text: botResponse,
+					isUser: false,
+					timestamp: new Date()
+				}
+			];
 		} catch (error) {
 			console.error('Error sending message:', error);
-			messages = [...messages, {
-				id: Date.now() + 1,
-				text: 'Sorry, I\'m having trouble connecting right now. Please try again later.',
-				isUser: false,
-				timestamp: new Date()
-			}];
+			messages = [
+				...messages,
+				{
+					id: Date.now() + 1,
+					text: "Sorry, I'm having trouble connecting right now. Please try again later.",
+					isUser: false,
+					timestamp: new Date()
+				}
+			];
 		} finally {
 			isLoading = false;
-			
-			// Scroll to bottom
+
 			setTimeout(() => {
 				if (chatContainer) {
 					chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -132,7 +123,7 @@
 			}, 100);
 		}
 	}
-	
+
 	function handleKeyPress(event: KeyboardEvent) {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();

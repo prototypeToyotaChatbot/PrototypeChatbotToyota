@@ -11,7 +11,6 @@ infinity/      # folder kode demo (nama folder dipertahankan untuk kompatibilita
 ├── car_service/
 │   ├── Dockerfile
 │   └── main.py
-├── user_service/
 │   ├── Dockerfile
 │   └── main.py
 ```
@@ -28,7 +27,6 @@ infinity/      # folder kode demo (nama folder dipertahankan untuk kompatibilita
 
 3. **Akses:**
    - Car Service → [http://localhost:8001](http://localhost:8001)
-   - User Service → [http://localhost:8002](http://localhost:8002)
    - QwenAgent / Model API → [http://localhost:9000](http://localhost:9000)
 
 ## 📝 Endpoint

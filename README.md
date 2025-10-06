@@ -42,7 +42,6 @@ infinity/  # kode service demo (nama folder tetap untuk kompatibilitas dengan se
 ├── car_service/        # layanan data dan chatbot untuk kendaraan
 │   ├── Dockerfile
 │   └── main.py
-├── user_service/       # layanan autentikasi dan user
 │   ├── Dockerfile
 │   └── main.py
 ├── (other services)
