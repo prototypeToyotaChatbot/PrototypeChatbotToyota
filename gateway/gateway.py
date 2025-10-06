@@ -3,8 +3,7 @@ from fastapi import FastAPI, Request, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 import httpx
-import json
-from typing import Optional
+from typing import Optional, Dict, Any
 import logging
 
 app = FastAPI(
@@ -14,6 +13,89 @@ app = FastAPI(
 )
 
 logger = logging.getLogger(__name__)
+
+
+
+def _to_optional_str(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    try:
+        return str(value)
+    except Exception:
+        return None
+
+
+
+def build_chat_envelope(context: Any, message: str) -> Dict[str, Optional[str]]:
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
+
+    if isinstance(context, dict):
+        user_id = _to_optional_str(context.get('user_id'))
+        session_candidate = context.get('session_id')
+        session_id = _to_optional_str(session_candidate) or user_id
+
+    return {
+        'user_id': user_id,
+        'session-id': session_id,
+        'output': message
+    }
+
+
+
+def normalize_chat_response(
+    payload: Any,
+    fallback: Dict[str, Optional[str]],
+    default_output: str
+) -> Dict[str, Optional[str]]:
+    normalized = {
+        'user_id': fallback.get('user_id'),
+        'session-id': fallback.get('session-id'),
+        'output': default_output
+    }
+
+    if isinstance(payload, dict):
+        user_candidate = _to_optional_str(payload.get('user_id'))
+        if user_candidate:
+            normalized['user_id'] = user_candidate
+
+        session_candidate = _to_optional_str(payload.get('session-id') or payload.get('session_id'))
+        if session_candidate:
+            normalized['session-id'] = session_candidate
+
+        context_data = payload.get('context')
+        if isinstance(context_data, dict):
+            context_user = _to_optional_str(context_data.get('user_id'))
+            if context_user and not normalized['user_id']:
+                normalized['user_id'] = context_user
+            context_session = _to_optional_str(context_data.get('session_id'))
+            if context_session:
+                normalized['session-id'] = context_session
+
+        output_candidate = payload.get('output')
+        if output_candidate is None:
+            output_candidate = payload.get('response') or payload.get('message')
+
+        if isinstance(output_candidate, str):
+            normalized['output'] = output_candidate
+        elif output_candidate is not None:
+            normalized['output'] = _to_optional_str(output_candidate) or default_output
+    elif payload is not None:
+        normalized['output'] = _to_optional_str(payload) or default_output
+
+    if not normalized['output'] or not normalized['output'].strip():
+        normalized['output'] = default_output
+
+    if normalized['user_id'] is None:
+        normalized['user_id'] = fallback.get('user_id')
+
+    if normalized['session-id'] is None:
+        normalized['session-id'] = fallback.get('session-id')
+
+    return normalized
+
 
 # Enable CORS
 app.add_middleware(
@@ -212,40 +294,53 @@ async def api_chat_with_assistant(request: Request):
     """API Chat endpoint untuk frontend PWA"""
     fallback_message = "I'm experiencing some technical difficulties. Please try again later."
 
+    fallback_envelope = build_chat_envelope({}, fallback_message)
+
     try:
         body = await request.json()
     except Exception as parse_error:
         error_message = str(parse_error) or parse_error.__class__.__name__
         logger.error("Failed to parse /api/chat request body: %s", error_message)
-        return JSONResponse(
-            status_code=400,
-            content={
-                "response": fallback_message,
-                "status": "error",
-                "error": "Invalid request payload"
-            }
-        )
+        return JSONResponse(status_code=400, content=fallback_envelope)
+
+    context = {}
+    if isinstance(body, dict):
+        context = body.get("context")
+
+    fallback_envelope = build_chat_envelope(context, fallback_message)
+
+    car_service_payload: Any = None
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(f"{CAR_SERVICE_URL}/chat", json=body)
             response.raise_for_status()
+            try:
+                car_service_payload = response.json()
+            except Exception as decode_error:
+                error_message = str(decode_error) or decode_error.__class__.__name__
+                logger.error(
+                    "Failed to decode car service /chat response: %s",
+                    error_message
+                )
+                return JSONResponse(status_code=502, content=fallback_envelope)
     except httpx.HTTPStatusError as http_error:
         upstream_status = http_error.response.status_code if http_error.response else 502
-        upstream_detail: Optional[str] = None
+        error_message: Optional[str] = None
         if http_error.response:
             try:
                 data = http_error.response.json()
                 if isinstance(data, dict):
-                    upstream_detail = (
+                    error_message = (
                         data.get("detail")
+                        or data.get("output")
                         or data.get("response")
                         or data.get("error")
                     )
             except Exception:
-                upstream_detail = None
+                error_message = None
 
-        error_message = upstream_detail or str(http_error) or http_error.__class__.__name__
+        error_message = error_message or str(http_error) or http_error.__class__.__name__
         logger.error(
             "Car service /chat returned HTTP %s: %s",
             upstream_status,
@@ -253,80 +348,23 @@ async def api_chat_with_assistant(request: Request):
         )
         return JSONResponse(
             status_code=upstream_status,
-            content={
-                "response": fallback_message,
-                "status": "error",
-                "error": error_message
-            }
+            content={**fallback_envelope, "output": fallback_message}
         )
     except Exception as call_error:
         error_message = str(call_error) or call_error.__class__.__name__
         logger.exception("Failed to call car service /chat")
         return JSONResponse(
             status_code=502,
-            content={
-                "response": fallback_message,
-                "status": "error",
-                "error": error_message
-            }
+            content={**fallback_envelope, "output": fallback_message}
         )
 
-    try:
-        chat_response = response.json()
-    except Exception as decode_error:
-        error_message = str(decode_error) or decode_error.__class__.__name__
-        logger.error("Failed to decode car service /chat response: %s", error_message)
-        return JSONResponse(
-            status_code=502,
-            content={
-                "response": fallback_message,
-                "status": "error",
-                "error": "Invalid response from car service"
-            }
-        )
-
-    if not isinstance(chat_response, dict):
-        chat_response = {"response": chat_response}
-
-    response_text = (
-        chat_response.get("response")
-        or chat_response.get("message")
-        or fallback_message
+    normalized_payload = normalize_chat_response(
+        car_service_payload,
+        fallback_envelope,
+        fallback_message
     )
 
-    suggestions = chat_response.get("suggestions")
-    if suggestions is None:
-        suggestions = []
-    elif isinstance(suggestions, str):
-        suggestions = [suggestions]
-    else:
-        suggestions = list(suggestions)
-
-    context_payload = chat_response.get("context") or {}
-    if not isinstance(context_payload, dict):
-        context_payload = {"value": context_payload}
-
-    normalized_payload = {
-        "response": response_text,
-        "suggestions": suggestions,
-        "context": context_payload,
-        "status": "success"
-    }
-
-    session_id = chat_response.get("session_id")
-    if not session_id and isinstance(context_payload, dict):
-        session_id = context_payload.get("session_id")
-    if session_id:
-        normalized_payload["session_id"] = session_id
-
-    for key, value in chat_response.items():
-        if key in normalized_payload:
-            continue
-        normalized_payload[key] = value
-
     return JSONResponse(content=normalized_payload)
-
-# ========== AUTH ENDPOINTS ==========
 @app.post("/api/auth/login", tags=["Auth"])
 async def login(request: Request):
     """Login endpoint untuk frontend PWA"""

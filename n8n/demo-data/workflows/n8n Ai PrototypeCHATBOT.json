@@ -1,5 +1,5 @@
 {
-  "name": "Ai Test",
+  "name": "n8n Ai PrototypeCHATBOT",
   "nodes": [
     {
       "parameters": {
@@ -11,13 +11,12 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -208,
-        0
+        -1344,
+        -16
       ],
-      "id": "95b175cb-60a0-4d76-bb23-03cda2a32978",
+      "id": "b6e95749-ef0e-4545-98d4-8309b3e9c60d",
       "name": "Webhook",
-      "webhookId": "0189b376-572e-4b10-aa86-6f4a995b864f",
-      "disabled": true
+      "webhookId": "0189b376-572e-4b10-aa86-6f4a995b864f"
     },
     {
       "parameters": {
@@ -26,12 +25,11 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        464,
-        0
+        -672,
+        -16
       ],
-      "id": "4ec37557-0038-44ab-9df1-49c1b81c0811",
-      "name": "Respond to Webhook",
-      "disabled": true
+      "id": "96f3e375-1b7c-4c36-a972-9d3a3b5874f6",
+      "name": "Respond to Webhook"
     },
     {
       "parameters": {
@@ -44,12 +42,11 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 2.2,
       "position": [
-        0,
-        0
+        -1136,
+        -16
       ],
-      "id": "f2a1652b-d12c-4a26-b7ef-5c290831f079",
-      "name": "AI Agent",
-      "disabled": true
+      "id": "719bc87e-ca04-47c7-920c-ff7284af3505",
+      "name": "AI Agent"
     },
     {
       "parameters": {
@@ -59,17 +56,11 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        672,
+        -1040,
         496
       ],
-      "id": "462770fd-79d8-475f-a946-886c08891462",
+      "id": "70df2ed5-f302-4b63-8440-254b9975141d",
       "name": "Google Gemini Chat Model",
-      "credentials": {
-        "googlePalmApi": {
-          "id": "p4rK4mz0H8CLj48n",
-          "name": "Google Gemini(PaLM) Api account"
-        }
-      },
       "disabled": true
     },
     {
@@ -80,26 +71,24 @@
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
       "position": [
-        48,
-        240
+        -1056,
+        176
       ],
-      "id": "67b169b7-1c7c-420b-a806-788849a0362e",
-      "name": "Simple Memory",
-      "disabled": true
+      "id": "5d0d4d6c-85ec-47f6-8d88-78c90430d704",
+      "name": "Simple Memory"
     },
     {
       "parameters": {
-        "jsCode": "// Ambil output mentah dari AI Agent\nconst raw = $json.output || \"\";\n\n// Buang wrapping ```json ... ``` kalau ada\nconst cleaned = raw.replace(/```json|```/g, \"\").trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  return [\n    {\n      json: {\n        error: \"Gagal parse AI output\",\n        raw: cleaned,\n        message: e.message\n      }\n    }\n  ];\n}\n\n// Ambil data dari webhook (kalau ada)\nconst webhookData = $('Webhook').all()[0]?.json?.body || {};\n\n// Return object JSON yang valid\nreturn [\n  {\n    json: {\n      response: parsed.response || \"\",\n      suggestions: parsed.suggestions || [],\n      context: {\n        ...parsed.context,\n        session_id: webhookData.session_id || parsed.context?.session_id || \"\",\n        user_id: webhookData.context?.user_id || parsed.context?.user_id || \"\"\n      }\n    }\n  }\n];\n"
+        "jsCode": "return [\n  {\n    json: {\n      user_id: $('Webhook').all()?.[0]?.json?.body?.context?.user_id || \"\",\n      session_id: $('Webhook').all()?.[0]?.json?.body?.context?.session_id || \"\",\n      output: $json.output || \"\"\n    }\n  }\n];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        288,
-        0
+        -848,
+        -16
       ],
-      "id": "027ffb14-360f-45b3-a5ae-c04b66bcd65d",
-      "name": "Code in JavaScript",
-      "disabled": true
+      "id": "19dd5e48-77e8-47ee-922a-f3ff06592bbe",
+      "name": "Code in JavaScript"
     },
     {
       "parameters": {
@@ -109,10 +98,10 @@
       "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
       "typeVersion": 1.1,
       "position": [
-        224,
-        256
+        -384,
+        336
       ],
-      "id": "147f58bf-b57b-4d84-8399-5b4ae0530a71",
+      "id": "d9502207-fb4c-4ab5-9925-9379de354a5f",
       "name": "MCP Client",
       "disabled": true
     },
@@ -121,47 +110,30 @@
         "promptType": "define",
         "text": "={{ $json.chatInput }}",
         "options": {
-          "systemMessage": "Kamu adalah sahabat kecil saya, berbicaralah selayaknya sahabat sendiri."
+          "systemMessage": "# SYSTEM PROMPT: AI Sales & Consultation Expert for Toyota\n\n## 1. PERAN & PERSONA\n\nAnda adalah **\"T-Bot\"**, seorang Asisten Konsultasi dan Penjualan virtual dari dealer resmi Toyota. Peran Anda adalah menjadi ahli produk yang sangat berpengetahuan, profesional, ramah, dan proaktif. Tujuan utama Anda adalah untuk memahami kebutuhan pelanggan dan memberikan solusi serta informasi terbaik terkait produk dan layanan Toyota. Selalu gunakan Bahasa Indonesia yang sopan dan mudah dimengerti.\n\n\n## 2. MISI UTAMA\n\nMisi Anda adalah memandu pengguna melalui perjalanan pembelian mobil mereka dengan memberikan informasi yang akurat dan relevan secara real-time menggunakan tools yang tersedia. Anda harus bisa menjawab pertanyaan, memberikan rekomendasi, membandingkan produk, dan menginformasikan promosi terkini.\n\n---\n\n## 3. PANDUAN OPERASIONAL\n\n- **Proaktif**: Jangan hanya menjawab. Setelah memberikan informasi, tawarkan langkah selanjutnya. Contoh: Setelah memberikan harga, tawarkan simulasi kredit atau jadwal test drive.\n- **Fokus pada Solusi**: Pahami masalah atau kebutuhan pengguna, bukan hanya kata kunci. Jika pengguna bilang \"Saya butuh mobil untuk keluarga\", fokus pada mobil dengan kapasitas besar dan fitur keamanan.\n- **Akurasi Data**: Jawaban Anda harus selalu berdasarkan output dari `tools` yang Anda panggil. Jangan membuat asumsi atau memberikan informasi yang tidak ada di dalam data.\n- **Klarifikasi**: Jika permintaan pengguna ambigu atau kurang jelas, ajukan pertanyaan klarifikasi sebelum memanggil `tool`. Contoh: \"Tentu, saya bisa carikan mobil keluarga. Apakah ada preferensi budget atau jumlah kursi minimum?\"\n\n---\n\n## 4. TOOLS YANG TERSEDIA (KEMAMPUAN ANDA)\n\nAnda memiliki akses ke database internal Toyota melalui `tools` berikut. Gunakan `tool` yang paling sesuai untuk setiap permintaan.\n\n### Tool: `list_cars`\n- **Deskripsi**: Gunakan tool ini untuk mendapatkan daftar **semua model mobil** yang tersedia.\n- **Kapan Digunakan**: Ketika pengguna bertanya \"ada mobil apa saja?\", \"lihat semua model\", atau pertanyaan umum sejenis tentang ketersediaan model.\n- **Parameter**: Tidak ada.\n- **Contoh Pengguna**: \"Coba lihatin semua mobil Toyota yang dijual.\"\n\n### Tool: `list_car_variants`\n- **Deskripsi**: Gunakan tool ini untuk mendapatkan semua **varian (tipe)** dari satu model mobil spesifik, beserta detail harga dan spesifikasi dasarnya.\n- **Kapan Digunakan**: Ketika pengguna ingin tahu tipe-tipe dari sebuah mobil. Contoh: \"Avanza ada tipe apa aja?\", \"Bedanya Rush GR Sport sama tipe G apa?\".\n- **Parameter**:\n    - `car_id` (string, UUID): ID unik dari model mobil. Anda harus mendapatkan ID ini dari `list_cars` terlebih dahulu jika belum tahu.\n- **Contoh Pengguna**: \"Untuk Toyota Raize, ada varian apa saja ya?\"\n\n### Tool: `get_car_recommendations`\n- **Deskripsi**: Tool paling penting untuk memberikan **rekomendasi mobil** berdasarkan kriteria spesifik dari pengguna.\n- **Kapan Digunakan**: Ketika pengguna mendeskripsikan kebutuhan mereka tanpa menyebut model mobil. Ini adalah tool utama untuk konsultasi.\n- **Parameter** (opsional, kombinasikan sesuai kebutuhan):\n    - `budget_min` / `budget_max` (float): Kisaran harga.\n    - `use_case` (string): Kegunaan utama (e.g., \"keluarga\", \"harian\", \"bisnis\", \"off-road\").\n    - `target_demographic` (string): Profil pengguna (e.g., \"Gen Z\", \"Milenial\", \"Keluarga\", \"Eksekutif\").\n    - `seating_capacity` (integer): Jumlah kursi minimum.\n    - `fuel_type` (string): Jenis bahan bakar (e.g., \"Bensin\", \"Diesel\", \"Hybrid\").\n    - `transmission` (string): Jenis transmisi (e.g., \"Manual\", \"Otomatis\").\n- **Contoh Pengguna**: \"Saya cari mobil buat keluarga, budget di bawah 400 juta, yang penting muat 7 orang.\"\n\n### Tool: `compare_variants`\n- **Deskripsi**: Gunakan tool ini untuk menampilkan perbandingan **head-to-head** antara 2 hingga 4 varian mobil.\n- **Kapan Digunakan**: Ketika pengguna secara eksplisit meminta untuk membandingkan beberapa mobil.\n- **Parameter**:\n    - `variant_ids` (string): Daftar ID varian yang dipisahkan koma. Anda harus mendapatkan ID ini dari `list_car_variants`.\n- **Contoh Pengguna**: \"Bagus mana antara Avanza Veloz sama Rush GR Sport?\"\n\n### Tool: `list_promotions`\n- **Deskripsi**: Gunakan tool ini untuk mendapatkan semua **promo, diskon, atau penawaran spesial** yang sedang aktif saat ini.\n- **Kapan Digunakan**: Ketika pengguna bertanya tentang \"promo\", \"diskon\", \"cashback\", \"penawaran\", atau \"harga spesial\".\n- **Parameter**: Tidak ada.\n- **Contoh Pengguna**: \"Lagi ada promo apa bulan ini?\"\n\n### Tool: `get_stock_info`\n- **Deskripsi**: Gunakan tool ini untuk memeriksa **ketersediaan stok** unit mobil di kota tertentu atau untuk varian tertentu.\n- **Kapan Digunakan**: Ketika pengguna bertanya \"apakah unitnya ready stock?\", \"kalau inden berapa lama?\", atau \"di kota Bandung ada stok Avanza?\".\n- **Parameter** (opsional):\n    - `city` (string): Nama kota.\n    - `variant_id` (string, UUID): ID spesifik dari varian mobil.\n- **Contoh Pengguna**: \"Apakah Innova Zenix Hybrid ready stock di Jakarta?\"\n\n---\n\n## 5. ALUR KERJA & LOGIKA\n\n1.  **Analisis Niat Pengguna**: Pahami apa yang sebenarnya diinginkan pengguna.\n    - \"Harga Avanza\" -> Pengguna butuh daftar varian dengan harga. -> Gunakan `list_car_variants`.\n    - \"Mobil irit buat kerja\" -> Pengguna butuh rekomendasi. -> Gunakan `get_car_recommendations` dengan parameter `use_case: 'harian'` dan `fuel_type: 'Bensin'`.\n    - \"Bandingkan Agya dan Ayla\" -> Pengguna butuh perbandingan. -> Gunakan `compare_variants`.\n\n2.  **Pemanggilan Tool**:\n    - Identifikasi `tool` yang paling tepat.\n    - Kumpulkan parameter yang dibutuhkan. Jika parameter kurang, tanyakan pada pengguna.\n    - Panggil `tool` dengan parameter yang benar.\n\n3.  **Sintesis Respons**:\n    - Baca dan pahami data JSON yang dikembalikan oleh `tool`.\n    - Jangan hanya menampilkan data mentah. Ubah data tersebut menjadi kalimat yang natural dan informatif.\n    - **Contoh Buruk**: `{\"status\": \"success\", \"data\": [{\"model_name\": \"Avanza\", \"price\": 250000000}]}`\n    - **Contoh Baik**: \"Tentu, untuk Toyota Avanza tipe G transmisi manual, harganya saat ini adalah Rp 250.000.000 (OTR). Apakah Anda ingin saya jelaskan fitur utamanya atau langsung buatkan simulasi kredit?\"\n\n4.  **Menangani Pertanyaan Kompleks**:\n    - Jika pertanyaan membutuhkan beberapa `tool`, jalankan secara berurutan.\n    - **Contoh**: \"Bandingkan mobil keluarga termurah yang lagi ada promo.\"\n        1.  Panggil `get_car_recommendations` dengan `use_case: 'keluarga'` dan urutkan berdasarkan harga termurah.\n        2.  Panggil `list_promotions`.\n        3.  Bandingkan hasil dari kedua `tool` untuk menemukan mobil yang cocok dan sedang promo.\n        4.  Sajikan jawabannya kepada pengguna.\n\n---\n\n## 6. FORMAT RESPON\n\n- Gunakan **bold** untuk menekankan nama model, varian, atau harga.\n- Gunakan daftar (bullet points) untuk menyajikan spesifikasi atau perbandingan agar mudah dibaca.\n- Selalu sertakan \"call to action\" atau pertanyaan lanjutan untuk menjaga percakapan tetap berjalan.\n- Jika memberikan harga, selalu sebutkan mata uang (Rp) dan jika memungkinkan, tambahkan keterangan (misal: \"OTR Jakarta\").\n"
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 2.2,
       "position": [
-        1056,
-        112
+        400,
+        -48
       ],
-      "id": "7ab7b440-6ee6-4161-a63a-3decadcfc649",
-      "name": "AI Agent1"
-    },
-    {
-      "parameters": {
-        "sessionIdType": "customKey",
-        "sessionKey": "="
-      },
-      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
-      "typeVersion": 1.3,
-      "position": [
-        1104,
-        352
-      ],
-      "id": "f3ce7426-4b60-4faa-a24a-b44ef80a8c92",
-      "name": "Simple Memory1",
+      "id": "0ff22c89-a6df-456e-9c4a-458deb2c34cd",
+      "name": "AI Agent1",
       "disabled": true
     },
     {
-      "parameters": {
-        "endpointUrl": "http://car_service:8007/mcp",
-        "include": "selected",
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
-      "typeVersion": 1.1,
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
       "position": [
-        1280,
-        368
+        448,
+        192
       ],
-      "id": "2b52d0d1-8033-40b0-a7e4-e73a12d6571b",
-      "name": "MCP Client1"
+      "id": "1010833e-f46f-4aca-8577-2f075d5e4e32",
+      "name": "Simple Memory1",
+      "disabled": true
     },
     {
       "parameters": {
@@ -170,12 +142,13 @@
       "type": "@n8n/n8n-nodes-langchain.chatTrigger",
       "typeVersion": 1.3,
       "position": [
-        896,
-        112
+        240,
+        -48
       ],
-      "id": "346a47b0-167d-4a9c-97b5-818470450d96",
+      "id": "d8245893-0cd1-4811-9ea1-b50dda7aa2c8",
       "name": "When chat message received",
-      "webhookId": "59db27fc-d10e-401e-b853-f1098ee18a47"
+      "webhookId": "59db27fc-d10e-401e-b853-f1098ee18a47",
+      "disabled": true
     },
     {
       "parameters": {
@@ -187,45 +160,43 @@
       "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
       "typeVersion": 1.3,
       "position": [
-        432,
-        224
+        768,
+        128
       ],
-      "id": "3b1c3745-b9e8-4795-844e-0fc2179746ce",
+      "id": "5b156e2e-5469-4af4-a247-fde426d0f7b0",
       "name": "Postgres PGVector Store",
       "credentials": {
         "postgres": {
-          "id": "wiEWG7D3Te0PhyOR",
-          "name": "LocalHost DB"
+          "id": "u8lx1MmvcJBK1ala",
+          "name": "Postgres account"
         }
       },
       "disabled": true
     },
     {
       "parameters": {
-        "url": "https://drive.usercontent.google.com/download?id=19NR5-m77TUVHDirdmnODAzEC0PMAXWsE&export=download&authuser=0&confirm=t&uuid=11d4d4fe-5d2e-4a41-8678-62d3add21e6a&at=AN8xHoqYCliviJUzPLF8mFtOZkpc:1759044913435",
+        "url": "https://drive.usercontent.google.com/download?id=19NR5-m77TUVHDirdmnODAzEC0PMAXWsE&export=download&authuser=0&confirm=t&uuid=74861a7f-8319-4174-b826-7e3698c7985a&at=AN8xHoqaedEhNt0JxsdTYTckO5ES:1759060704518",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        16,
-        688
+        -864,
+        864
       ],
-      "id": "e6f835ab-88b0-4416-b304-ae6456e7f9b3",
-      "name": "HTTP Request",
-      "disabled": true
+      "id": "30dde3bf-6a1e-4772-8da4-df89fdc36e00",
+      "name": "HTTP Request"
     },
     {
       "parameters": {},
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        -160,
-        688
+        -1040,
+        864
       ],
-      "id": "b45421de-d766-4f83-b925-83fba8e04f06",
-      "name": "When clicking ‘Test workflow’",
-      "disabled": true
+      "id": "db4d08d7-27a7-4adf-9b5f-74691cc08fe1",
+      "name": "When clicking ‘Test workflow’"
     },
     {
       "parameters": {
@@ -236,18 +207,17 @@
       "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
       "typeVersion": 1.1,
       "position": [
-        560,
-        688
+        -320,
+        864
       ],
-      "id": "6dcb1aaa-06d1-48b5-9c8e-79217abec39e",
+      "id": "6cb911ab-83b3-48a7-9930-e668bbfe2a9f",
       "name": "Postgres PGVector Store1",
       "credentials": {
         "postgres": {
-          "id": "wiEWG7D3Te0PhyOR",
-          "name": "LocalHost DB"
+          "id": "u8lx1MmvcJBK1ala",
+          "name": "Postgres account"
         }
-      },
-      "disabled": true
+      }
     },
     {
       "parameters": {
@@ -256,12 +226,11 @@
       "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
       "typeVersion": 1,
       "position": [
-        688,
-        992
+        -192,
+        1168
       ],
-      "id": "37273492-9d95-4546-90e5-1a7cd216ada4",
-      "name": "Default Data Loader",
-      "disabled": true
+      "id": "ca3b00ad-e4de-4dad-9b32-3d3efa368c09",
+      "name": "Default Data Loader"
     },
     {
       "parameters": {
@@ -270,12 +239,11 @@
       "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
       "typeVersion": 1,
       "position": [
-        672,
-        1168
+        -208,
+        1344
       ],
-      "id": "f999e12c-d2e7-463c-813a-524a3ab1a87f",
-      "name": "Recursive Character Text Splitter",
-      "disabled": true
+      "id": "c1881b59-350f-4ddd-a36b-ff1ecf32c20c",
+      "name": "Recursive Character Text Splitter"
     },
     {
       "parameters": {
@@ -285,12 +253,11 @@
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1,
       "position": [
-        160,
-        688
+        -720,
+        864
       ],
-      "id": "553c1c73-f80d-46d4-abc7-f7b8865100f4",
-      "name": "Extract from File",
-      "disabled": true
+      "id": "5217b51a-d48f-4348-ad11-b9309a62f80d",
+      "name": "Extract from File"
     },
     {
       "parameters": {
@@ -299,12 +266,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        384,
-        688
+        -496,
+        864
       ],
-      "id": "c6035b58-a59c-4077-9e29-24628e8f4f72",
-      "name": "Code",
-      "disabled": true
+      "id": "f2c1e810-9c01-45b0-af14-2f5572fd04bc",
+      "name": "Code"
     },
     {
       "parameters": {
@@ -313,18 +279,17 @@
       "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
       "typeVersion": 1,
       "position": [
-        352,
-        976
+        -528,
+        1152
       ],
-      "id": "268f777e-3da0-4340-8395-7a9f9580035d",
+      "id": "34cf3139-7bee-46de-b8c3-dbaf6b74eb33",
       "name": "Embeddings Ollama",
       "credentials": {
         "ollamaApi": {
-          "id": "gnb1z1znHUuR2iCE",
-          "name": "GIK OLLAMA"
+          "id": "HOxeENY1Nze4IAJe",
+          "name": "Ollama account"
         }
-      },
-      "disabled": true
+      }
     },
     {
       "parameters": {
@@ -333,43 +298,15 @@
       "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
       "typeVersion": 1,
       "position": [
-        496,
-        432
+        848,
+        288
       ],
-      "id": "cfaa4585-782a-4465-a0c6-ab4553efddab",
+      "id": "2a8bbce7-e455-4c34-8837-fa924720fd5e",
       "name": "Embeddings Ollama1",
       "credentials": {
         "ollamaApi": {
-          "id": "gnb1z1znHUuR2iCE",
-          "name": "GIK OLLAMA"
-        }
-      },
-      "disabled": true
-    },
-    {
-      "parameters": {
-        "model": {
-          "__rl": true,
-          "value": "gpt-4.1",
-          "mode": "list",
-          "cachedResultName": "gpt-4.1"
-        },
-        "options": {
-          "maxRetries": 4
-        }
-      },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.2,
-      "position": [
-        -80,
-        176
-      ],
-      "id": "bfb19ca7-c4f5-49a5-bc3e-8cb96804e794",
-      "name": "OpenAI Chat Model",
-      "credentials": {
-        "openAiApi": {
-          "id": "DabpLQWG9C3vjxGR",
-          "name": "OpenAi account"
+          "id": "HOxeENY1Nze4IAJe",
+          "name": "Ollama account"
         }
       },
       "disabled": true
@@ -382,15 +319,111 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        928,
-        336
+        -576,
+        384
       ],
-      "id": "20ea56ac-a4ac-4f3e-b9cc-c1a573a2202b",
+      "id": "240fcc59-ec9a-4276-8ad0-4705f57ded4c",
       "name": "Google Gemini Chat Model1",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "model": "qwen2.5:3b-instruct",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        592
+      ],
+      "id": "993cfcdd-ca0b-4929-bcce-750e184f596a",
+      "name": "Ollama Chat Model",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "model": "z-ai/glm-4.5-air:free",
+        "options": {
+          "maxRetries": 5
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        144
+      ],
+      "id": "cc287355-f123-47b0-84fa-e08f4085c8a4",
+      "name": "OpenRouter Chat Model",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "model": "llama3.1:8b",
+        "options": {
+          "temperature": 0.8,
+          "topK": 50,
+          "topP": 0.9,
+          "frequencyPenalty": 0.3,
+          "presencePenalty": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        272,
+        160
+      ],
+      "id": "914aa983-654f-4765-acaf-b757c779c954",
+      "name": "Ollama Chat Model1",
       "credentials": {
-        "googlePalmApi": {
-          "id": "p4rK4mz0H8CLj48n",
-          "name": "Google Gemini(PaLM) Api account"
+        "ollamaApi": {
+          "id": "HOxeENY1Nze4IAJe",
+          "name": "Ollama account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "endpointUrl": "http://car_service:8007/mcp",
+        "include": "selected",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.1,
+      "position": [
+        624,
+        208
+      ],
+      "id": "16112350-0c3e-4492-b26b-9aa73ac12bfa",
+      "name": "Car Service",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "model": "llama3.1:8b",
+        "options": {
+          "temperature": 0.8,
+          "topK": 50,
+          "topP": 0.9,
+          "frequencyPenalty": 0.3,
+          "presencePenalty": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -1184,
+        160
+      ],
+      "id": "65a1fed3-1adb-43b5-8e73-158bd4143473",
+      "name": "Ollama Chat Model2",
+      "credentials": {
+        "ollamaApi": {
+          "id": "HOxeENY1Nze4IAJe",
+          "name": "Ollama account"
         }
       }
     }
@@ -406,11 +439,6 @@
             "index": 0
           }
         ]
-      ]
-    },
-    "Google Gemini Chat Model": {
-      "ai_languageModel": [
-        []
       ]
     },
     "Simple Memory": {
@@ -446,39 +474,12 @@
         ]
       ]
     },
-    "MCP Client": {
-      "ai_tool": [
-        [
-          {
-            "node": "AI Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AI Agent1": {
-      "main": [
-        []
-      ]
-    },
     "Simple Memory1": {
       "ai_memory": [
         [
           {
             "node": "AI Agent1",
             "type": "ai_memory",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "MCP Client1": {
-      "ai_tool": [
-        [
-          {
-            "node": "AI Agent1",
-            "type": "ai_tool",
             "index": 0
           }
         ]
@@ -499,7 +500,7 @@
       "ai_tool": [
         [
           {
-            "node": "AI Agent",
+            "node": "AI Agent1",
             "type": "ai_tool",
             "index": 0
           }
@@ -594,18 +595,12 @@
         ]
       ]
     },
-    "OpenAI Chat Model": {
+    "OpenRouter Chat Model": {
       "ai_languageModel": [
-        [
-          {
-            "node": "AI Agent",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
-    "Google Gemini Chat Model1": {
+    "Ollama Chat Model1": {
       "ai_languageModel": [
         [
           {
@@ -615,17 +610,38 @@
           }
         ]
       ]
+    },
+    "Car Service": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "c49dfab5-51a2-4b1b-a13c-8d599014590f",
+  "versionId": "e0ddb16e-cf38-450a-9bb0-c1782722d1e4",
   "meta": {
-    "templateCredsSetupCompleted": true,
     "instanceId": "558d88703fb65b2d0e44613bc35916258b0f0bf983c5d4730c00c424b77ca36a"
   },
-  "id": "2zx1ebwzWbPGAOJV",
+  "id": "aoqdQQARJ5E5lOeT",
   "tags": []
 }

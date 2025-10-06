@@ -7,7 +7,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 import os
 import json
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from decimal import Decimal
 import uvicorn
 from contextlib import contextmanager
@@ -246,9 +246,22 @@ class ChatRequest(BaseModel):
     context: Optional[Dict[str, Any]] = None
 
 class ChatResponse(BaseModel):
-    response: str
-    context: Optional[Dict[str, Any]] = None
-    suggestions: Optional[List[str]] = None
+    user_id: Optional[str] = Field(default=None, alias="user_id")
+    session_id: Optional[str] = Field(default=None, alias="session-id")
+    output: str
+
+    class Config:
+        allow_population_by_field_name = True
+
+
+def prepare_chat_context(raw_context: Optional[Dict[str, Any]]) -> Tuple[Dict[str, Any], Optional[str], str]:
+    """Normalize incoming chat context and guarantee a session identifier."""
+    base_context = deepcopy(raw_context) if isinstance(raw_context, dict) else {}
+    user_id = base_context.get("user_id")
+    session_id = base_context.get("session_id") or user_id or f"session-{uuid.uuid4()}"
+    base_context.setdefault("session_id", session_id)
+    return base_context, user_id, session_id
+
 
 # =================================================================
 # APP & MIDDLEWARE
@@ -777,57 +790,136 @@ async def call_n8n_webhook(message: str, context: dict = None) -> dict:
             response.raise_for_status()
             
             result = response.json()
+
             if not isinstance(result, dict):
-                result = {"response": result}
 
-            result_body = result.get("response")
-            result_suggestions = result.get("suggestions")
-            result_context = result.get("context") or {}
+                result = {"output": result}
 
-            if isinstance(result_body, list):
-                first_entry = None
-                for item in result_body:
-                    if isinstance(item, dict):
-                        first_entry = item
-                        break
-                if first_entry is None and result_body:
-                    first_entry = {"response": result_body[0]}
+
+
+            result_context = result.get("context") if isinstance(result.get("context"), dict) else {}
+
+            output_candidate = (
+
+                result.get("output")
+
+                or result.get("response")
+
+                or result.get("message")
+
+            )
+
+
+
+            if isinstance(output_candidate, list):
+
+                first_entry = next((
+
+                    item for item in output_candidate
+
+                    if isinstance(item, dict)
+
+                    and (item.get("output") or item.get("response") or item.get("message"))
+
+                ), None)
 
                 if first_entry:
-                    result_body = first_entry.get("response", result_body)
-                    if not result_suggestions:
-                        result_suggestions = first_entry.get("suggestions")
-                    nested_context = first_entry.get("context") or {}
-                    if isinstance(nested_context, dict):
-                        if not result_context:
-                            result_context = nested_context
-                        else:
-                            merged_context = dict(nested_context)
-                            merged_context.update(result_context)
-                            result_context = merged_context
 
-            if not isinstance(result_suggestions, list):
-                if result_suggestions is None:
-                    result_suggestions = []
-                elif isinstance(result_suggestions, str):
-                    result_suggestions = [result_suggestions]
-                else:
-                    result_suggestions = list(result_suggestions)
+                    output_candidate = (
+
+                        first_entry.get("output")
+
+                        or first_entry.get("response")
+
+                        or first_entry.get("message")
+
+                    )
+
+                    nested_context = first_entry.get("context")
+
+                    if isinstance(nested_context, dict):
+
+                        merged_context = dict(result_context)
+
+                        merged_context.update(nested_context)
+
+                        result_context = merged_context
+
+                elif output_candidate:
+
+                    output_candidate = output_candidate[0]
+
+
+
+            if isinstance(output_candidate, dict):
+
+                output_candidate = (
+
+                    output_candidate.get("output")
+
+                    or output_candidate.get("response")
+
+                    or output_candidate.get("message")
+
+                    or json.dumps(output_candidate)
+
+                )
+
+
 
             if not isinstance(result_context, dict):
-                result_context = {"value": result_context}
 
-            if context_data.get("user_id") and "user_id" not in result_context:
-                result_context["user_id"] = context_data["user_id"]
-            result_context.setdefault("session_id", session_id)
+                result_context = {}
 
-            result["response"] = result_body
-            result["suggestions"] = result_suggestions
-            result["context"] = result_context
-            result.setdefault("session_id", session_id)
 
-            logger.info(f"N8N webhook response: {result}")
-            return result
+
+            if not isinstance(output_candidate, str):
+
+                try:
+
+                    output_candidate = json.dumps(output_candidate)
+
+                except (TypeError, ValueError):
+
+                    output_candidate = str(output_candidate)
+
+
+
+            response_user_id = (
+
+                result.get("user_id")
+
+                or result_context.get("user_id")
+
+                or context_data.get("user_id")
+
+            )
+
+            response_session_id = (
+
+                result.get("session_id")
+
+                or result_context.get("session_id")
+
+                or session_id
+
+            )
+
+
+
+            result_payload = {
+
+                "output": output_candidate or CHATBOT_CONFIG["fallback_message"],
+
+                "user_id": response_user_id,
+
+                "session_id": response_session_id,
+
+            }
+
+            logger.info(f"N8N webhook response: {result_payload}")
+
+            return result_payload
             
     except httpx.TimeoutException:
         logger.error(f"N8N webhook timeout after {timeout}s")
@@ -836,117 +928,95 @@ async def call_n8n_webhook(message: str, context: dict = None) -> dict:
         logger.error(f"Error calling N8N webhook: {e}")
         return None
 
-def get_welcome_response() -> ChatResponse:
+def get_welcome_response(user_id: Optional[str], session_id: str) -> ChatResponse:
     """Mendapatkan respons selamat datang"""
     return ChatResponse(
-        response=CHATBOT_CONFIG["welcome_message"],
-        suggestions=[
-            "Show me available cars",
-            "What promotions are available?",
-            "I need a family car",
-            "Compare different models"
-        ],
-        context={"type": "welcome"}
+        user_id=user_id,
+        session_id=session_id,
+        output=CHATBOT_CONFIG["welcome_message"]
     )
 
-async def get_fallback_response(message: str, db: Session) -> ChatResponse:
+async def get_fallback_response(message: str, db: Session, user_id: Optional[str], session_id: str) -> ChatResponse:
     """Mendapatkan respons fallback dengan informasi dasar"""
     try:
         # Berikan beberapa informasi berguna berdasarkan kata kunci
         message_lower = message.lower()
-        
+
         if any(word in message_lower for word in ["car", "mobil", "model", "available"]):
             cars = db.query(Car).limit(5).all()
-            car_list = [f"• {car.model_name} ({car.segment})" for car in cars]
-            response = f"Here are some of our popular car models:\n\n" + "\n".join(car_list)
-            suggestions = ["Tell me more about these cars", "Show me pricing", "Compare models"]
-            
+            car_list = [f"- {car.model_name} ({car.segment})" for car in cars]
+            response_text = f"Here are some of our popular car models:\n\n" + "\n".join(car_list)
         elif any(word in message_lower for word in ["promo", "promotion", "discount"]):
             promotions = db.query(Promotion).filter(
                 Promotion.end_date >= func.current_date()
             ).limit(3).all()
             if promotions:
-                response = f"We have {len(promotions)} active promotions! Would you like to see the details?"
-                suggestions = ["Show promotions", "Which cars are on sale?", "Tell me about discounts"]
+                response_text = f"We have {len(promotions)} active promotions! Would you like to see the details?"
             else:
-                response = "We always offer competitive prices! Let me know what car you're looking for."
-                suggestions = ["Show me cars", "What's your best price?", "I need a recommendation"]
+                response_text = "We always offer competitive prices! Let me know what car you're looking for."
         else:
-            response = CHATBOT_CONFIG["fallback_message"]
-            suggestions = [
-                "Show me available cars",
-                "What promotions do you have?",
-                "I need buying advice",
-                "Compare different models"
-            ]
-            
+            response_text = CHATBOT_CONFIG["fallback_message"]
+
         return ChatResponse(
-            response=response,
-            suggestions=suggestions,
-            context={"type": "fallback", "original_message": message}
+            user_id=user_id,
+            session_id=session_id,
+            output=response_text
         )
-        
     except Exception as e:
         logger.error(f"Error in fallback response: {e}")
         return ChatResponse(
-            response=CHATBOT_CONFIG["error_message"],
-            suggestions=["Try asking again", "Contact sales team"]
+            user_id=user_id,
+            session_id=session_id,
+            output=CHATBOT_CONFIG["error_message"]
         )
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_with_assistant(request: ChatRequest, db: Session = Depends(get_db)):
     """Chat dengan assistant untuk konsultasi mobil"""
+    context_data: Dict[str, Any] = {}
+    user_id: Optional[str] = None
+    session_id: str = f"session-{uuid.uuid4()}"
+    effective_user_id: Optional[str] = None
     try:
         message = request.message.strip()
-        
-        # Cek apakah ini pesan pembuka
+        context_data, user_id, session_id = prepare_chat_context(request.context)
+        effective_user_id = user_id or context_data.get("user_id")
+
         if any(word in message.lower() for word in ["hello", "hi", "halo", "hai", "start"]):
-            return get_welcome_response()
-            
-        # Jika AI processing diaktifkan dan webhook URL tersedia
+            return get_welcome_response(effective_user_id, session_id)
+
         if CHATBOT_CONFIG["use_ai_processing"] and CHATBOT_CONFIG["n8n_webhook_url"]:
             logger.info(f"Sending message to N8N webhook: {message}")
-            
-            # Panggil N8N webhook
-            ai_response = await call_n8n_webhook(message, request.context)
-            
+            ai_response = await call_n8n_webhook(message, context_data)
+
             if ai_response:
-                # Gunakan respons dari AI
-                response_context = ai_response.get("context") or {}
-                if not isinstance(response_context, dict):
-                    response_context = {"value": response_context}
-
-                response_context.setdefault("source", "n8n_ai")
-                if request.context and isinstance(request.context, dict):
-                    if request.context.get("user_id") and "user_id" not in response_context:
-                        response_context["user_id"] = request.context.get("user_id")
-
-                if ai_response.get("session_id") and "session_id" not in response_context:
-                    response_context["session_id"] = ai_response["session_id"]
-
-                return ChatResponse(
-                    response=ai_response.get("response", ai_response.get("message", "AI response received")),
-                    suggestions=ai_response.get("suggestions", ["Tell me more", "What else can you help with?"]),
-                    context=response_context
+                response_user_id = ai_response.get("user_id") or effective_user_id
+                response_session_id = ai_response.get("session_id") or session_id
+                output_text = (
+                    ai_response.get("output")
+                    or ai_response.get("response")
+                    or ai_response.get("message")
+                    or CHATBOT_CONFIG["fallback_message"]
                 )
-            else:
-                # Jika webhook gagal, gunakan fallback
-                logger.warning("N8N webhook failed, using fallback response")
-                return await get_fallback_response(message, db)
-        else:
-            # Jika AI processing tidak diaktifkan, gunakan fallback
-            logger.info(f"AI processing disabled, using fallback for: {message}")
-            return await get_fallback_response(message, db)
-            
+                return ChatResponse(
+                    user_id=response_user_id,
+                    session_id=response_session_id,
+                    output=output_text
+                )
+
+            logger.warning("N8N webhook failed, using fallback response")
+            return await get_fallback_response(message, db, effective_user_id, session_id)
+
+        logger.info(f"AI processing disabled or webhook missing, using fallback for: {message}")
+        return await get_fallback_response(message, db, effective_user_id, session_id)
+
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}")
         return ChatResponse(
-            response=CHATBOT_CONFIG["error_message"],
-            suggestions=["Try asking again", "Contact sales team"],
-            context={"error": str(e)}
+            user_id=effective_user_id or user_id,
+            session_id=session_id,
+            output=CHATBOT_CONFIG["error_message"],
         )
-
-
 mcp = FastApiMCP(app, name="Car Service MCP",
     description="MCP untuk layanan data mobil, rekomendasi, dan promosi.",
     include_operations=[

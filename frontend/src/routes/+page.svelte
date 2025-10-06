@@ -70,7 +70,6 @@
 						? Intl.DateTimeFormat().resolvedOptions().timeZone
 						: undefined
 			};
-
 			const response = await fetch('/api/chat', {
 				method: 'POST',
 				headers: {
@@ -81,16 +80,33 @@
 					context
 				})
 			});
-			
 			let botResponse = '';
-			if (response.ok) {
-				const data = await response.json();
-				botResponse = data.response || 'I received your message: ' + userMessage;
-			} else {
-				botResponse = 'Sorry, I\'m having trouble connecting right now. Please try again later.';
+			let payload: any = null;
+			try {
+				payload = await response.json();
+			} catch (parseError) {
+				payload = null;
 			}
-			
-			// Add bot response
+			if (payload?.user_id) {
+				userId = payload.user_id;
+				if (typeof window !== 'undefined') {
+					localStorage.setItem(USER_STORAGE_KEY, userId);
+				}
+			}
+			const returnedSessionId = payload?.['session-id'] ?? payload?.session_id;
+			if (returnedSessionId) {
+				sessionId = returnedSessionId;
+			}
+			const extractOutput = (data: any) => {
+				const outputValue = typeof data?.output === 'string' ? data.output : undefined;
+				return outputValue && outputValue.trim().length > 0 ? outputValue : undefined;
+			};
+			if (response.ok && payload) {
+				botResponse = extractOutput(payload) ?? 'I received your message: ' + userMessage;
+			} else {
+				botResponse = extractOutput(payload) ?? "Sorry, I'm having trouble connecting right now. Please try again later.";
+			}
+						// Add bot response
 			messages = [...messages, {
 				id: Date.now() + 1,
 				text: botResponse,
