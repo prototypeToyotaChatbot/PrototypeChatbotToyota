@@ -1,47 +1,43 @@
 
-# Infinity Cafe Microservices ☕️
+# Prototype Chatbot Toyota Microservices
 
-Infinity Cafe adalah sistem pemesanan restoran berbasis microservices menggunakan Python + FastAPI + PgVector17 + FastAPI-MCP.
+Prototype Chatbot Toyota adalah rangkaian layanan mikro (microservices) demo yang menampilkan integrasi chatbot RAG, layanan data kendaraan, dan alur agent menggunakan Python + FastAPI + PgVector17 + FastAPI-MCP.
 
-## 📦 Struktur Folder
+## 📦 Struktur Folder (contoh layanan)
 
 ```
-infinity/
+infinity/      # folder kode demo (nama folder dipertahankan untuk kompatibilitas seed/db)
 ├── requirements.txt
-├── menu_service/
+├── car_service/
 │   ├── Dockerfile
 │   └── main.py
-├── order_service/
-│   ├── Dockerfile
-│   └── main.py
-├── kitchen_service/
+├── user_service/
 │   ├── Dockerfile
 │   └── main.py
 ```
 
-## 🚀 Cara Menjalankan
+## 🚀 Cara Menjalankan (singkat)
 
 1. **Persiapan:**
    - Install Docker dan Docker Compose
 
 2. **Jalankan layanan:**
    ```bash
-   docker-compose -f docker-compose.infinitycafe.yml up --build
+   docker compose up --build
    ```
 
 3. **Akses:**
-   - Menu Service → [http://localhost:8001](http://localhost:8001)
-   - Order Service → [http://localhost:8002](http://localhost:8002)
-   - Kitchen Service → [http://localhost:8003](http://localhost:8003)
-   - QwenAgent Service → [http://localhost:9000](http://localhost:9000)
+   - Car Service → [http://localhost:8001](http://localhost:8001)
+   - User Service → [http://localhost:8002](http://localhost:8002)
+   - QwenAgent / Model API → [http://localhost:9000](http://localhost:9000)
 
 ## 📝 Endpoint
 - **QwenAgent Service:**
-  - POST `http://localhost:9000/api/chat` untuk chat dengan QwenAgent. dengan body:
-    ```json
-    {
-      "messages": "Tambahkan menu baru dengan nama 'Nasi Goreng' dan harga '20000'.",
-    }
+   - POST `http://localhost:9000/api/chat` untuk chat dengan agent/model. Contoh body (sesuaikan dengan service):
+      ```json
+      {
+         "messages": "Tambahkan data kendaraan baru dengan model 'Avanza' dan varian 'G'.",
+      }
 
 
 

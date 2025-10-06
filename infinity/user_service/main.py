@@ -33,7 +33,7 @@ Base = declarative_base()
 
 app = FastAPI(
     title="User Service API",
-    description="Service untuk manajemen pengguna dan otentikasi Infinity Cafe",
+    description="Service untuk manajemen pengguna dan otentikasi Prototype Chatbot Toyota",
     version="1.0.0"
 )
 

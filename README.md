@@ -1,6 +1,6 @@
-#  Infinity Cafe Microservices Agentic-RAG
+#  Prototype Chatbot Toyota Microservices Agentic-RAG
 
-**Infinity Cafe Microservices Agentoc-RAG from Self-hosted AI Starter Kit Based** is an open-source Docker Compose template designed to swiftly initialize a comprehensive local AI and low-code development environment.
+**Prototype Chatbot Toyota Microservices (Agentic-RAG)** is an open-source Docker Compose template designed to swiftly initialize a comprehensive local AI and low-code development environment tailored for a chatbot and vehicle services demo.
 
 ![n8n.io - Screenshot](https://raw.githubusercontent.com/n8n-io/self-hosted-ai-starter-kit/main/assets/n8n-demo.gif)
 
@@ -26,35 +26,33 @@ store with an comprehensive API http://localhost:6333/dashboard
 ✅ [**Postgres Vector 17**](https://www.postgresql.org/) -  Workhorse of the Data
 Engineering world, handles large amounts of data safely.
 
-✅ [**InitDB**] initial DB infinity cafe
+✅ [**InitDB**] initial DB for prototype services
 
 ✅ [**pgAdmin**] http://localhost:5050
 
 ✅ [**ngrok**] Setup ngrok, plz change in .env ${NG_CRE}, ${NG_URL}
 
-✅  Infinity Cafe Microservices ☕️
-Infinity Cafe adalah sistem pemesanan restoran berbasis microservices menggunakan Python + FastAPI + PgVector17 + FastAPI-MCP.
+✅  Prototype Chatbot Toyota Microservices
+Prototype Chatbot Toyota adalah kumpulan layanan mikro (microservices) demo yang menampilkan integrasi chatbot berbasis RAG, layanan data kendaraan, dan alur agent menggunakan Python + FastAPI + PgVector17 + FastAPI-MCP.
 
-## 📦 Struktur Folder
+## 📦 Struktur Folder (bagian penting)
 ```
-infinity/
+infinity/  # kode service demo (nama folder tetap untuk kompatibilitas dengan seed dan konfigurasi)
 ├── requirements.txt
-├── menu_service/
+├── car_service/        # layanan data dan chatbot untuk kendaraan
 │   ├── Dockerfile
 │   └── main.py
-├── order_service/
+├── user_service/       # layanan autentikasi dan user
 │   ├── Dockerfile
 │   └── main.py
-├── kitchen_service/
-│   ├── Dockerfile
-│   └── main.py
+├── (other services)
 ```
 ## **Akses:**
    - Menu Service → [http://localhost:8001](http://localhost:8001)
    - Order Service → [http://localhost:8002](http://localhost:8002)
    - Kitchen Service → [http://localhost:8003](http://localhost:8003)
 
-### What you can build
+### What you can build with this prototype
 
 ⭐️ **AI Agents** for scheduling appointments
 
@@ -69,8 +67,8 @@ infinity/
 ### Cloning the Repository
 
 ```bash
-git clone https://github.com/AIKABAYAN/infinitycafe.git
-cd infinitycafe
+git clone https://github.com/prototypeToyotaChatbot/PrototypeChatbotToyota.git
+cd PrototypeChatbotToyota
 ```
 
 ### Running n8n using Docker Compose
@@ -78,8 +76,8 @@ cd infinitycafe
 #### For Nvidia GPU users
 
 ```
-git clone https://github.com/AIKABAYAN/infinitycafe.git
-cd infinitycafe
+git clone https://github.com/prototypeToyotaChatbot/PrototypeChatbotToyota.git
+cd PrototypeChatbotToyota
 docker compose --profile gpu-nvidia up --build 
 ```
 
@@ -90,8 +88,8 @@ docker compose --profile gpu-nvidia up --build
 ### For AMD GPU users on Linux
 
 ```
-git clone https://github.com/AIKABAYAN/infinitycafe.git
-cd infinitycafe
+git clone https://github.com/prototypeToyotaChatbot/PrototypeChatbotToyota.git
+cd PrototypeChatbotToyota
 docker compose --profile gpu-amd up --build
 ```
 
@@ -110,8 +108,8 @@ If you want to run Ollama on your mac, check the
 for installation instructions, and run the starter kit as follows:
 
 ```
-git clone https://github.com/n8n-io/self-hosted-ai-starter-kit.git
-cd self-hosted-ai-starter-kit
+git clone https://github.com/prototypeToyotaChatbot/PrototypeChatbotToyota.git
+cd PrototypeChatbotToyota
 docker compose up
 ```
 
