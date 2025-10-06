@@ -86,7 +86,7 @@ User Input → Frontend → Gateway → Car Service → N8N Webhook → AI Proce
 
 ### **Test dengan AI Disabled (Fallback Mode):**
 ```bash
-curl -X POST http://localhost:2323/api/chat \
+curl -X POST http://localhost:22332/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello"}'
 ```

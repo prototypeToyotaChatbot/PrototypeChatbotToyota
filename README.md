@@ -15,7 +15,7 @@ quickly get started with building self-hosted AI workflows.
 
 ✅ [**Self-hosted n8n**](https://n8n.io/) 
    - Low-code platform with over 400 integrations and advanced AI components 
-   - http://localhost:5678
+   - http://localhost:25687
 
 ✅ [**Ollama**](https://ollama.com/) - Cross-platform LLM platform to install
 and run the latest local LLMs
@@ -28,7 +28,7 @@ Engineering world, handles large amounts of data safely.
 
 ✅ [**InitDB**] initial DB for prototype services
 
-✅ [**pgAdmin**] http://localhost:5050
+✅ [**pgAdmin**] http://localhost:25059
 
 ✅ [**ngrok**] Setup ngrok, plz change in .env ${NG_CRE}, ${NG_URL}
 
@@ -125,9 +125,9 @@ x-n8n: &service-n8n
     - OLLAMA_HOST=host.docker.internal:11434
 ```
 
-Additionally, after you see "Editor is now accessible via: <http://localhost:5678/>":
+Additionally, after you see "Editor is now accessible via: <http://localhost:25687/>":
 
-1. Head to <http://localhost:5678/home/credentials>
+1. Head to <http://localhost:25687/home/credentials>
 2. Click on "Local Ollama service"
 3. Change the base URL to "http://host.docker.internal:11434/"
 
@@ -144,16 +144,16 @@ docker compose --profile cpu up
 The core of the Self-hosted AI Starter Kit is a Docker Compose file, pre-configured with network and storage settings, minimizing the need for additional installations.
 After completing the installation steps above, simply follow the steps below to get started.
 
-1. Open <http://localhost:5678/> in your browser to set up n8n. You’ll only
+1. Open <http://localhost:25687/> in your browser to set up n8n. You’ll only
    have to do this once.
 2. Open the included workflow:
-   <http://localhost:5678/workflow/srOnR8PAY3u4RSwb>
+   <http://localhost:25687/workflow/srOnR8PAY3u4RSwb>
 3. Click the **Chat** button at the bottom of the canvas, to start running the workflow.
 4. If this is the first time you’re running the workflow, you may need to wait
    until Ollama finishes downloading Llama3.2. You can inspect the docker
    console logs to check on the progress.
 
-To open n8n at any time, visit <http://localhost:5678/> in your browser.
+To open n8n at any time, visit <http://localhost:25687/> in your browser.
 
 With your n8n instance, you’ll have access to over 400 integrations and a
 suite of basic and advanced AI nodes such as
