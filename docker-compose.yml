@@ -328,6 +328,8 @@ services:
     container_name: toyota-frontend
     hostname: frontend
     networks: ['demo']
+    environment:
+      - GATEWAY_URL=http://toyota-gateway:2323
     ports:
       - "7777:3000"
     extra_hosts:
