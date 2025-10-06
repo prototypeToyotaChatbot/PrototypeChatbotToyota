@@ -1,7 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
 
-const GATEWAY_URL = 'http://prototypechatbot-gateway-1:2323';
+const GATEWAY_URL = env.GATEWAY_URL ?? 'http://localhost:2323';
 
 export const POST: RequestHandler = async ({ request }) => {
 	try {

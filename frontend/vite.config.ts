@@ -2,6 +2,8 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const gatewayUrl = process.env.GATEWAY_URL ?? 'http://localhost:2323';
+
 export default defineConfig({
 	plugins: [
 		sveltekit(),
@@ -37,7 +39,7 @@ export default defineConfig({
 	server: {
 		proxy: {
 			'/api': {
-				target: 'http://prototypechatbot-gateway-1:2323',
+				target: gatewayUrl,
 				changeOrigin: true,
 				secure: false,
 				rewrite: (path) => path
