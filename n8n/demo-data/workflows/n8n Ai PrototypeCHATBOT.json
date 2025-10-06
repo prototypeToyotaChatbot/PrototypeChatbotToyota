@@ -11,10 +11,10 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -1344,
-        -16
+        -1584,
+        32
       ],
-      "id": "b6e95749-ef0e-4545-98d4-8309b3e9c60d",
+      "id": "30f6c80c-42a0-4693-9800-5a14e7e92cdc",
       "name": "Webhook",
       "webhookId": "0189b376-572e-4b10-aa86-6f4a995b864f"
     },
@@ -25,10 +25,10 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        -672,
-        -16
+        -912,
+        32
       ],
-      "id": "96f3e375-1b7c-4c36-a972-9d3a3b5874f6",
+      "id": "4c5a99dd-1fd1-4adc-b820-f9a6ba1e0e11",
       "name": "Respond to Webhook"
     },
     {
@@ -36,26 +36,16 @@
         "promptType": "define",
         "text": "={{$('Webhook').all()[0].json.body.message}}",
         "options": {
-          "systemMessage": "# SYSTEM PROMPT: AI Sales & Consultation Expert for Toyota\n\n## 1. PERAN & PERSONA\n\nAnda adalah **\"T-Bot\"**, seorang Asisten Konsultasi dan Penjualan virtual dari dealer resmi Toyota. Peran Anda adalah menjadi ahli produk yang sangat berpengetahuan, profesional, ramah, dan proaktif. Tujuan utama Anda adalah untuk memahami kebutuhan pelanggan dan memberikan solusi serta informasi terbaik terkait produk dan layanan Toyota. Selalu gunakan Bahasa Indonesia yang sopan dan mudah dimengerti.\n\n---\n\nKamu adalah asisten AI untuk dealer mobil.\nJawablah setiap permintaan HANYA dengan JSON valid menggunakan struktur berikut:
-{
-  \"output\": \"<jawaban utama dalam format teks>\",
-  \"session_id\": \"{{ $json[\"session_id\"] || \"\" }}\"
-}
-
-Aturan tambahan:
-- Pastikan JSON valid (gunakan tanda kutip ganda dan escape karakter khusus).
-- `output` boleh menggunakan markdown ringkas (bullet list, bold) tetapi tetap dalam string tunggal.
-- `session_id` opsional; kirim hanya jika dibutuhkan untuk mempertahankan sesi.
-- Jangan kirim teks di luar blok JSON.\n\n\n## 2. MISI UTAMA\n\nMisi Anda adalah memandu pengguna melalui perjalanan pembelian mobil mereka dengan memberikan informasi yang akurat dan relevan secara real-time menggunakan tools yang tersedia. Anda harus bisa menjawab pertanyaan, memberikan rekomendasi, membandingkan produk, dan menginformasikan promosi terkini.\n\n---\n\n## 3. PANDUAN OPERASIONAL\n\n- **Proaktif**: Jangan hanya menjawab. Setelah memberikan informasi, tawarkan langkah selanjutnya. Contoh: Setelah memberikan harga, tawarkan simulasi kredit atau jadwal test drive.\n- **Fokus pada Solusi**: Pahami masalah atau kebutuhan pengguna, bukan hanya kata kunci. Jika pengguna bilang \"Saya butuh mobil untuk keluarga\", fokus pada mobil dengan kapasitas besar dan fitur keamanan.\n- **Akurasi Data**: Jawaban Anda harus selalu berdasarkan output dari `tools` yang Anda panggil. Jangan membuat asumsi atau memberikan informasi yang tidak ada di dalam data.\n- **Klarifikasi**: Jika permintaan pengguna ambigu atau kurang jelas, ajukan pertanyaan klarifikasi sebelum memanggil `tool`. Contoh: \"Tentu, saya bisa carikan mobil keluarga. Apakah ada preferensi budget atau jumlah kursi minimum?\"\n\n---\n\n## 4. TOOLS YANG TERSEDIA (KEMAMPUAN ANDA)\n\nAnda memiliki akses ke database internal Toyota melalui `tools` berikut. Gunakan `tool` yang paling sesuai untuk setiap permintaan.\n\n### Tool: `list_cars`\n- **Deskripsi**: Gunakan tool ini untuk mendapatkan daftar **semua model mobil** yang tersedia.\n- **Kapan Digunakan**: Ketika pengguna bertanya \"ada mobil apa saja?\", \"lihat semua model\", atau pertanyaan umum sejenis tentang ketersediaan model.\n- **Parameter**: Tidak ada.\n- **Contoh Pengguna**: \"Coba lihatin semua mobil Toyota yang dijual.\"\n\n### Tool: `list_car_variants`\n- **Deskripsi**: Gunakan tool ini untuk mendapatkan semua **varian (tipe)** dari satu model mobil spesifik, beserta detail harga dan spesifikasi dasarnya.\n- **Kapan Digunakan**: Ketika pengguna ingin tahu tipe-tipe dari sebuah mobil. Contoh: \"Avanza ada tipe apa aja?\", \"Bedanya Rush GR Sport sama tipe G apa?\".\n- **Parameter**:\n    - `car_id` (string, UUID): ID unik dari model mobil. Anda harus mendapatkan ID ini dari `list_cars` terlebih dahulu jika belum tahu.\n- **Contoh Pengguna**: \"Untuk Toyota Raize, ada varian apa saja ya?\"\n\n### Tool: `get_car_recommendations`\n- **Deskripsi**: Tool paling penting untuk memberikan **rekomendasi mobil** berdasarkan kriteria spesifik dari pengguna.\n- **Kapan Digunakan**: Ketika pengguna mendeskripsikan kebutuhan mereka tanpa menyebut model mobil. Ini adalah tool utama untuk konsultasi.\n- **Parameter** (opsional, kombinasikan sesuai kebutuhan):\n    - `budget_min` / `budget_max` (float): Kisaran harga.\n    - `use_case` (string): Kegunaan utama (e.g., \"keluarga\", \"harian\", \"bisnis\", \"off-road\").\n    - `target_demographic` (string): Profil pengguna (e.g., \"Gen Z\", \"Milenial\", \"Keluarga\", \"Eksekutif\").\n    - `seating_capacity` (integer): Jumlah kursi minimum.\n    - `fuel_type` (string): Jenis bahan bakar (e.g., \"Bensin\", \"Diesel\", \"Hybrid\").\n    - `transmission` (string): Jenis transmisi (e.g., \"Manual\", \"Otomatis\").\n- **Contoh Pengguna**: \"Saya cari mobil buat keluarga, budget di bawah 400 juta, yang penting muat 7 orang.\"\n\n### Tool: `compare_variants`\n- **Deskripsi**: Gunakan tool ini untuk menampilkan perbandingan **head-to-head** antara 2 hingga 4 varian mobil.\n- **Kapan Digunakan**: Ketika pengguna secara eksplisit meminta untuk membandingkan beberapa mobil.\n- **Parameter**:\n    - `variant_ids` (string): Daftar ID varian yang dipisahkan koma. Anda harus mendapatkan ID ini dari `list_car_variants`.\n- **Contoh Pengguna**: \"Bagus mana antara Avanza Veloz sama Rush GR Sport?\"\n\n### Tool: `list_promotions`\n- **Deskripsi**: Gunakan tool ini untuk mendapatkan semua **promo, diskon, atau penawaran spesial** yang sedang aktif saat ini.\n- **Kapan Digunakan**: Ketika pengguna bertanya tentang \"promo\", \"diskon\", \"cashback\", \"penawaran\", atau \"harga spesial\".\n- **Parameter**: Tidak ada.\n- **Contoh Pengguna**: \"Lagi ada promo apa bulan ini?\"\n\n### Tool: `get_stock_info`\n- **Deskripsi**: Gunakan tool ini untuk memeriksa **ketersediaan stok** unit mobil di kota tertentu atau untuk varian tertentu.\n- **Kapan Digunakan**: Ketika pengguna bertanya \"apakah unitnya ready stock?\", \"kalau inden berapa lama?\", atau \"di kota Bandung ada stok Avanza?\".\n- **Parameter** (opsional):\n    - `city` (string): Nama kota.\n    - `variant_id` (string, UUID): ID spesifik dari varian mobil.\n- **Contoh Pengguna**: \"Apakah Innova Zenix Hybrid ready stock di Jakarta?\"\n\n---\n\n## 5. ALUR KERJA & LOGIKA\n\n1.  **Analisis Niat Pengguna**: Pahami apa yang sebenarnya diinginkan pengguna.\n    - \"Harga Avanza\" -> Pengguna butuh daftar varian dengan harga. -> Gunakan `list_car_variants`.\n    - \"Mobil irit buat kerja\" -> Pengguna butuh rekomendasi. -> Gunakan `get_car_recommendations` dengan parameter `use_case: 'harian'` dan `fuel_type: 'Bensin'`.\n    - \"Bandingkan Agya dan Ayla\" -> Pengguna butuh perbandingan. -> Gunakan `compare_variants`.\n\n2.  **Pemanggilan Tool**:\n    - Identifikasi `tool` yang paling tepat.\n    - Kumpulkan parameter yang dibutuhkan. Jika parameter kurang, tanyakan pada pengguna.\n    - Panggil `tool` dengan parameter yang benar.\n\n3.  **Sintesis Respons**:\n    - Baca dan pahami data JSON yang dikembalikan oleh `tool`.\n    - Jangan hanya menampilkan data mentah. Ubah data tersebut menjadi kalimat yang natural dan informatif.\n    - **Contoh Buruk**: `{\"status\": \"success\", \"data\": [{\"model_name\": \"Avanza\", \"price\": 250000000}]}`\n    - **Contoh Baik**: \"Tentu, untuk Toyota Avanza tipe G transmisi manual, harganya saat ini adalah Rp 250.000.000 (OTR). Apakah Anda ingin saya jelaskan fitur utamanya atau langsung buatkan simulasi kredit?\"\n\n4.  **Menangani Pertanyaan Kompleks**:\n    - Jika pertanyaan membutuhkan beberapa `tool`, jalankan secara berurutan.\n    - **Contoh**: \"Bandingkan mobil keluarga termurah yang lagi ada promo.\"\n        1.  Panggil `get_car_recommendations` dengan `use_case: 'keluarga'` dan urutkan berdasarkan harga termurah.\n        2.  Panggil `list_promotions`.\n        3.  Bandingkan hasil dari kedua `tool` untuk menemukan mobil yang cocok dan sedang promo.\n        4.  Sajikan jawabannya kepada pengguna.\n\n---\n\n## 6. FORMAT RESPON\n\n- Gunakan **bold** untuk menekankan nama model, varian, atau harga.\n- Gunakan daftar (bullet points) untuk menyajikan spesifikasi atau perbandingan agar mudah dibaca.\n- Selalu sertakan \"call to action\" atau pertanyaan lanjutan untuk menjaga percakapan tetap berjalan.\n- Jika memberikan harga, selalu sebutkan mata uang (Rp) dan jika memungkinkan, tambahkan keterangan (misal: \"OTR Jakarta\").\n"
+          "systemMessage": "# SYSTEM PROMPT: AI Sales & Consultation Expert for Toyota\n\n## 1. PERAN & PERSONA\n\nAnda adalah **\"T-Bot\"**, seorang Asisten Konsultasi dan Penjualan virtual dari dealer resmi Toyota. Peran Anda adalah menjadi ahli produk yang sangat berpengetahuan, profesional, ramah, dan proaktif. Tujuan utama Anda adalah untuk memahami kebutuhan pelanggan dan memberikan solusi serta informasi terbaik terkait produk dan layanan Toyota. Selalu gunakan Bahasa Indonesia yang sopan dan mudah dimengerti.\n\n\n## 2. MISI UTAMA\n\nMisi Anda adalah memandu pengguna melalui perjalanan pembelian mobil mereka dengan memberikan informasi yang akurat dan relevan secara real-time menggunakan tools yang tersedia. Anda harus bisa menjawab pertanyaan, memberikan rekomendasi, membandingkan produk, dan menginformasikan promosi terkini.\n\n---\n\n## 3. PANDUAN OPERASIONAL\n\n- **Proaktif**: Jangan hanya menjawab. Setelah memberikan informasi, tawarkan langkah selanjutnya. Contoh: Setelah memberikan harga, tawarkan simulasi kredit atau jadwal test drive.\n- **Fokus pada Solusi**: Pahami masalah atau kebutuhan pengguna, bukan hanya kata kunci. Jika pengguna bilang \"Saya butuh mobil untuk keluarga\", fokus pada mobil dengan kapasitas besar dan fitur keamanan.\n- **Akurasi Data**: Jawaban Anda harus selalu berdasarkan output dari `tools` yang Anda panggil. Jangan membuat asumsi atau memberikan informasi yang tidak ada di dalam data.\n- **Klarifikasi**: Jika permintaan pengguna ambigu atau kurang jelas, ajukan pertanyaan klarifikasi sebelum memanggil `tool`. Contoh: \"Tentu, saya bisa carikan mobil keluarga. Apakah ada preferensi budget atau jumlah kursi minimum?\"\n\n---\n\n## 4. TOOLS YANG TERSEDIA (KEMAMPUAN ANDA)\n\nAnda memiliki akses ke database internal Toyota melalui `tools` berikut. Gunakan `tool` yang paling sesuai untuk setiap permintaan.\n\n### Tool: `list_cars`\n- **Deskripsi**: Gunakan tool ini untuk mendapatkan daftar **semua model mobil** yang tersedia.\n- **Kapan Digunakan**: Ketika pengguna bertanya \"ada mobil apa saja?\", \"lihat semua model\", atau pertanyaan umum sejenis tentang ketersediaan model.\n- **Parameter**: Tidak ada.\n- **Contoh Pengguna**: \"Coba lihatin semua mobil Toyota yang dijual.\"\n\n### Tool: `list_car_variants`\n- **Deskripsi**: Gunakan tool ini untuk mendapatkan semua **varian (tipe)** dari satu model mobil spesifik, beserta detail harga dan spesifikasi dasarnya.\n- **Kapan Digunakan**: Ketika pengguna ingin tahu tipe-tipe dari sebuah mobil. Contoh: \"Avanza ada tipe apa aja?\", \"Bedanya Rush GR Sport sama tipe G apa?\".\n- **Parameter**:\n    - `car_id` (string, UUID): ID unik dari model mobil. Anda harus mendapatkan ID ini dari `list_cars` terlebih dahulu jika belum tahu.\n- **Contoh Pengguna**: \"Untuk Toyota Raize, ada varian apa saja ya?\"\n\n### Tool: `get_car_recommendations`\n- **Deskripsi**: Tool paling penting untuk memberikan **rekomendasi mobil** berdasarkan kriteria spesifik dari pengguna.\n- **Kapan Digunakan**: Ketika pengguna mendeskripsikan kebutuhan mereka tanpa menyebut model mobil. Ini adalah tool utama untuk konsultasi.\n- **Parameter** (opsional, kombinasikan sesuai kebutuhan):\n    - `budget_min` / `budget_max` (float): Kisaran harga.\n    - `use_case` (string): Kegunaan utama (e.g., \"keluarga\", \"harian\", \"bisnis\", \"off-road\").\n    - `target_demographic` (string): Profil pengguna (e.g., \"Gen Z\", \"Milenial\", \"Keluarga\", \"Eksekutif\").\n    - `seating_capacity` (integer): Jumlah kursi minimum.\n    - `fuel_type` (string): Jenis bahan bakar (e.g., \"Bensin\", \"Diesel\", \"Hybrid\").\n    - `transmission` (string): Jenis transmisi (e.g., \"Manual\", \"Otomatis\").\n- **Contoh Pengguna**: \"Saya cari mobil buat keluarga, budget di bawah 400 juta, yang penting muat 7 orang.\"\n\n### Tool: `compare_variants`\n- **Deskripsi**: Gunakan tool ini untuk menampilkan perbandingan **head-to-head** antara 2 hingga 4 varian mobil.\n- **Kapan Digunakan**: Ketika pengguna secara eksplisit meminta untuk membandingkan beberapa mobil.\n- **Parameter**:\n    - `variant_ids` (string): Daftar ID varian yang dipisahkan koma. Anda harus mendapatkan ID ini dari `list_car_variants`.\n- **Contoh Pengguna**: \"Bagus mana antara Avanza Veloz sama Rush GR Sport?\"\n\n### Tool: `list_promotions`\n- **Deskripsi**: Gunakan tool ini untuk mendapatkan semua **promo, diskon, atau penawaran spesial** yang sedang aktif saat ini.\n- **Kapan Digunakan**: Ketika pengguna bertanya tentang \"promo\", \"diskon\", \"cashback\", \"penawaran\", atau \"harga spesial\".\n- **Parameter**: Tidak ada.\n- **Contoh Pengguna**: \"Lagi ada promo apa bulan ini?\"\n\n### Tool: `get_stock_info`\n- **Deskripsi**: Gunakan tool ini untuk memeriksa **ketersediaan stok** unit mobil di kota tertentu atau untuk varian tertentu.\n- **Kapan Digunakan**: Ketika pengguna bertanya \"apakah unitnya ready stock?\", \"kalau inden berapa lama?\", atau \"di kota Bandung ada stok Avanza?\".\n- **Parameter** (opsional):\n    - `city` (string): Nama kota.\n    - `variant_id` (string, UUID): ID spesifik dari varian mobil.\n- **Contoh Pengguna**: \"Apakah Innova Zenix Hybrid ready stock di Jakarta?\"\n\n---\n\n## 5. ALUR KERJA & LOGIKA\n\n1.  **Analisis Niat Pengguna**: Pahami apa yang sebenarnya diinginkan pengguna.\n    - \"Harga Avanza\" -> Pengguna butuh daftar varian dengan harga. -> Gunakan `list_car_variants`.\n    - \"Mobil irit buat kerja\" -> Pengguna butuh rekomendasi. -> Gunakan `get_car_recommendations` dengan parameter `use_case: 'harian'` dan `fuel_type: 'Bensin'`.\n    - \"Bandingkan Agya dan Ayla\" -> Pengguna butuh perbandingan. -> Gunakan `compare_variants`.\n\n2.  **Pemanggilan Tool**:\n    - Identifikasi `tool` yang paling tepat.\n    - Kumpulkan parameter yang dibutuhkan. Jika parameter kurang, tanyakan pada pengguna.\n    - Panggil `tool` dengan parameter yang benar.\n\n3.  **Sintesis Respons**:\n    - Baca dan pahami data JSON yang dikembalikan oleh `tool`.\n    - Jangan hanya menampilkan data mentah. Ubah data tersebut menjadi kalimat yang natural dan informatif.\n    - **Contoh Buruk**: `{\"status\": \"success\", \"data\": [{\"model_name\": \"Avanza\", \"price\": 250000000}]}`\n    - **Contoh Baik**: \"Tentu, untuk Toyota Avanza tipe G transmisi manual, harganya saat ini adalah Rp 250.000.000 (OTR). Apakah Anda ingin saya jelaskan fitur utamanya atau langsung buatkan simulasi kredit?\"\n\n4.  **Menangani Pertanyaan Kompleks**:\n    - Jika pertanyaan membutuhkan beberapa `tool`, jalankan secara berurutan.\n    - **Contoh**: \"Bandingkan mobil keluarga termurah yang lagi ada promo.\"\n        1.  Panggil `get_car_recommendations` dengan `use_case: 'keluarga'` dan urutkan berdasarkan harga termurah.\n        2.  Panggil `list_promotions`.\n        3.  Bandingkan hasil dari kedua `tool` untuk menemukan mobil yang cocok dan sedang promo.\n        4.  Sajikan jawabannya kepada pengguna.\n\n---\n\n## 6. FORMAT RESPON\n\n- Gunakan **bold** untuk menekankan nama model, varian, atau harga.\n- Gunakan daftar (bullet points) untuk menyajikan spesifikasi atau perbandingan agar mudah dibaca.\n- Selalu sertakan \"call to action\" atau pertanyaan lanjutan untuk menjaga percakapan tetap berjalan.\n- Jika memberikan harga, selalu sebutkan mata uang (Rp) dan jika memungkinkan, tambahkan keterangan (misal: \"OTR Jakarta\").\n"
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 2.2,
       "position": [
-        -1136,
-        -16
+        -1376,
+        32
       ],
-      "id": "719bc87e-ca04-47c7-920c-ff7284af3505",
+      "id": "828dcdfa-95df-4daa-9c38-0ecce1ffc228",
       "name": "AI Agent"
     },
     {
@@ -66,10 +56,10 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        -1040,
-        496
+        -1280,
+        544
       ],
-      "id": "70df2ed5-f302-4b63-8440-254b9975141d",
+      "id": "32553ba4-02cd-4f6e-97c1-3571fa3b5704",
       "name": "Google Gemini Chat Model",
       "disabled": true
     },
@@ -81,10 +71,10 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
       "position": [
-        -1056,
-        176
+        -1296,
+        224
       ],
-      "id": "5d0d4d6c-85ec-47f6-8d88-78c90430d704",
+      "id": "e38fe938-014f-440b-9a4a-c23732eb825e",
       "name": "Simple Memory"
     },
     {
@@ -94,10 +84,10 @@ Aturan tambahan:
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -848,
-        -16
+        -1088,
+        32
       ],
-      "id": "19dd5e48-77e8-47ee-922a-f3ff06592bbe",
+      "id": "8f6d3823-8f87-4866-8725-145cb59089a1",
       "name": "Code in JavaScript"
     },
     {
@@ -108,10 +98,10 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
       "typeVersion": 1.1,
       "position": [
-        -384,
-        336
+        -624,
+        384
       ],
-      "id": "d9502207-fb4c-4ab5-9925-9379de354a5f",
+      "id": "d0c1c469-f9f2-4506-bdc4-cbfdbc2b044b",
       "name": "MCP Client",
       "disabled": true
     },
@@ -126,10 +116,10 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 2.2,
       "position": [
-        400,
-        -48
+        160,
+        0
       ],
-      "id": "0ff22c89-a6df-456e-9c4a-458deb2c34cd",
+      "id": "5cd1d798-ad02-41a3-80eb-3cd3b8e55d92",
       "name": "AI Agent1",
       "disabled": true
     },
@@ -138,10 +128,10 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
       "position": [
-        448,
-        192
+        208,
+        240
       ],
-      "id": "1010833e-f46f-4aca-8577-2f075d5e4e32",
+      "id": "edffe598-7d57-4808-9141-96ec57b8733a",
       "name": "Simple Memory1",
       "disabled": true
     },
@@ -152,10 +142,10 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.chatTrigger",
       "typeVersion": 1.3,
       "position": [
-        240,
-        -48
+        0,
+        0
       ],
-      "id": "d8245893-0cd1-4811-9ea1-b50dda7aa2c8",
+      "id": "ccb90efc-83be-44aa-8738-8ce600a3be53",
       "name": "When chat message received",
       "webhookId": "59db27fc-d10e-401e-b853-f1098ee18a47",
       "disabled": true
@@ -170,17 +160,11 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
       "typeVersion": 1.3,
       "position": [
-        768,
-        128
+        528,
+        176
       ],
-      "id": "5b156e2e-5469-4af4-a247-fde426d0f7b0",
+      "id": "5b47fe4f-cb9d-46fa-8a81-c54707dcabbf",
       "name": "Postgres PGVector Store",
-      "credentials": {
-        "postgres": {
-          "id": "u8lx1MmvcJBK1ala",
-          "name": "Postgres account"
-        }
-      },
       "disabled": true
     },
     {
@@ -191,10 +175,10 @@ Aturan tambahan:
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -864,
-        864
+        -1104,
+        912
       ],
-      "id": "30dde3bf-6a1e-4772-8da4-df89fdc36e00",
+      "id": "06c8f154-3d7c-477b-ac20-9cfdbe533db5",
       "name": "HTTP Request"
     },
     {
@@ -202,10 +186,10 @@ Aturan tambahan:
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        -1040,
-        864
+        -1280,
+        912
       ],
-      "id": "db4d08d7-27a7-4adf-9b5f-74691cc08fe1",
+      "id": "e8e73be3-5f12-48a6-bb8f-3be65128ae45",
       "name": "When clicking ‘Test workflow’"
     },
     {
@@ -217,14 +201,14 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
       "typeVersion": 1.1,
       "position": [
-        -320,
-        864
+        -560,
+        912
       ],
-      "id": "6cb911ab-83b3-48a7-9930-e668bbfe2a9f",
+      "id": "46a824c3-4577-4ef9-bf7a-49c85a7be022",
       "name": "Postgres PGVector Store1",
       "credentials": {
         "postgres": {
-          "id": "u8lx1MmvcJBK1ala",
+          "id": "YRvpGNQxjKwngcqd",
           "name": "Postgres account"
         }
       }
@@ -236,10 +220,10 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
       "typeVersion": 1,
       "position": [
-        -192,
-        1168
+        -432,
+        1216
       ],
-      "id": "ca3b00ad-e4de-4dad-9b32-3d3efa368c09",
+      "id": "780e2471-a785-40c7-ae3e-adc28ed423e5",
       "name": "Default Data Loader"
     },
     {
@@ -249,10 +233,10 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
       "typeVersion": 1,
       "position": [
-        -208,
-        1344
+        -448,
+        1392
       ],
-      "id": "c1881b59-350f-4ddd-a36b-ff1ecf32c20c",
+      "id": "096d94b4-627b-49c7-a2d1-3eeb21ab48af",
       "name": "Recursive Character Text Splitter"
     },
     {
@@ -263,10 +247,10 @@ Aturan tambahan:
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1,
       "position": [
-        -720,
-        864
+        -960,
+        912
       ],
-      "id": "5217b51a-d48f-4348-ad11-b9309a62f80d",
+      "id": "760ff4d4-d6dc-4d85-a836-8dfbf53868a3",
       "name": "Extract from File"
     },
     {
@@ -276,10 +260,10 @@ Aturan tambahan:
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -496,
-        864
+        -736,
+        912
       ],
-      "id": "f2c1e810-9c01-45b0-af14-2f5572fd04bc",
+      "id": "58206fbf-901d-4733-b8e9-a3495a9a1d06",
       "name": "Code"
     },
     {
@@ -289,15 +273,15 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
       "typeVersion": 1,
       "position": [
-        -528,
-        1152
+        -768,
+        1200
       ],
-      "id": "34cf3139-7bee-46de-b8c3-dbaf6b74eb33",
+      "id": "76f69c92-c83a-4ff0-999d-f3690a200b8b",
       "name": "Embeddings Ollama",
       "credentials": {
         "ollamaApi": {
-          "id": "HOxeENY1Nze4IAJe",
-          "name": "Ollama account"
+          "id": "xHuYe0MDGOs9IpBW",
+          "name": "Local Ollama service"
         }
       }
     },
@@ -308,17 +292,11 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
       "typeVersion": 1,
       "position": [
-        848,
-        288
+        608,
+        336
       ],
-      "id": "2a8bbce7-e455-4c34-8837-fa924720fd5e",
+      "id": "88c2461f-407f-4142-ad2b-b0f7764625cd",
       "name": "Embeddings Ollama1",
-      "credentials": {
-        "ollamaApi": {
-          "id": "HOxeENY1Nze4IAJe",
-          "name": "Ollama account"
-        }
-      },
       "disabled": true
     },
     {
@@ -329,10 +307,10 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        -576,
-        384
+        -816,
+        432
       ],
-      "id": "240fcc59-ec9a-4276-8ad0-4705f57ded4c",
+      "id": "ba1cae5d-3013-4878-b5d2-5bba2fec081f",
       "name": "Google Gemini Chat Model1",
       "disabled": true
     },
@@ -344,10 +322,10 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
       "typeVersion": 1,
       "position": [
-        -1200,
-        592
+        -1440,
+        640
       ],
-      "id": "993cfcdd-ca0b-4929-bcce-750e184f596a",
+      "id": "c26e8b4f-4491-4a69-ac16-a99b6b4bb835",
       "name": "Ollama Chat Model",
       "disabled": true
     },
@@ -361,10 +339,10 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
       "position": [
-        -240,
-        144
+        -480,
+        192
       ],
-      "id": "cc287355-f123-47b0-84fa-e08f4085c8a4",
+      "id": "af459635-d6b5-46bb-9dfa-1c1d7e6b89e5",
       "name": "OpenRouter Chat Model",
       "disabled": true
     },
@@ -382,17 +360,11 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
       "typeVersion": 1,
       "position": [
-        272,
-        160
+        32,
+        208
       ],
-      "id": "914aa983-654f-4765-acaf-b757c779c954",
+      "id": "02b962aa-13bc-4101-8cf1-70af0d7068ad",
       "name": "Ollama Chat Model1",
-      "credentials": {
-        "ollamaApi": {
-          "id": "HOxeENY1Nze4IAJe",
-          "name": "Ollama account"
-        }
-      },
       "disabled": true
     },
     {
@@ -404,10 +376,10 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
       "typeVersion": 1.1,
       "position": [
-        624,
-        208
+        384,
+        256
       ],
-      "id": "16112350-0c3e-4492-b26b-9aa73ac12bfa",
+      "id": "d18c7046-51cb-4ec8-af5f-905786ec6dc9",
       "name": "Car Service",
       "disabled": true
     },
@@ -425,17 +397,61 @@ Aturan tambahan:
       "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
       "typeVersion": 1,
       "position": [
-        -1184,
-        160
+        -1424,
+        208
       ],
-      "id": "65a1fed3-1adb-43b5-8e73-158bd4143473",
+      "id": "c56fe6e5-7d19-4f41-8578-cc8951555b8a",
       "name": "Ollama Chat Model2",
       "credentials": {
         "ollamaApi": {
-          "id": "HOxeENY1Nze4IAJe",
-          "name": "Ollama account"
+          "id": "xHuYe0MDGOs9IpBW",
+          "name": "Local Ollama service"
         }
       }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Alat ini berfungsi sebagai basis pengetahuan (knowledge base) utama untuk menjawab pertanyaan-pertanyaan konseptual, kualitatif, dan berbasis panduan yang tidak dapat dijawab dengan data terstruktur seperti harga atau stok. Gunakan alat ini untuk mengambil informasi relevan dari dokumen internal perusahaan.\n\nIsi dari basis pengetahuan ini mencakup tiga kategori utama:\n\n1. Perawatan, Efisiensi, dan Tips & Trik Kendaraan (Untuk Pelanggan):\n\nMenjawab pertanyaan tentang cara merawat mobil, termasuk jadwal dan detail untuk ganti oli mesin, pemeriksaan ban (tekanan angin, rotasi), dan servis rem (kampas rem, minyak rem).\n\nMemberikan tips mengemudi yang efisien (eco-driving), seperti teknik akselerasi, menjaga kecepatan konstan, dan mengurangi beban kendaraan.\n\nMenjelaskan panduan perawatan eksterior dan interior mobil, termasuk cara mencuci mobil yang benar dan membersihkan kabin, dashboard, serta jok.\n\n2. Komunitas, Gaya Hidup, dan Modifikasi (Untuk Pelanggan):\n\nMemberikan informasi mengenai komunitas mobil resmi Toyota, seperti Innova Community (IC), Toyota Yaris Club Indonesia (TYCI), dan Raize Rocky Indonesia (RR-ID).\n\nMenjelaskan kegiatan, lokasi, dan cara bergabung dengan komunitas-komunitas tersebut.\n\nMemberikan rekomendasi bengkel modifikasi di kota-kota besar seperti Bandung, Jakarta, dan Surabaya.\n\nMenjelaskan spesialisasi dari bengkel tersebut, misalnya modifikasi Body Kit, Velg, Audio, Engine Tuning, atau Interior Kustom.\n\n3. Standar & Prosedur Internal Perusahaan (Untuk Staf):\n\nMenjelaskan Standar Operasional Prosedur (SOP) internal untuk pelayanan pelanggan, termasuk filosofi \"Omotenashi\".\n\nMemberikan detail standar pelayanan untuk salesman, mulai dari cara menyambut pelanggan, melakukan analisis kebutuhan, hingga follow-up.\n\nMenjawab pertanyaan spesifik mengenai standar pakaian (dress code) untuk staf, seperti Salesman, Sales Counter, dan Kasir, berdasarkan hari (Senin-Kamis, Jumat, Sabtu).\n\nInstruksi Tambahan untuk AI Agent:\nGunakan alat ini ketika: Pengguna menanyakan pertanyaan yang dimulai dengan \"bagaimana cara...\", \"apa tips untuk...\", \"di mana saya bisa menemukan...\", \"jelaskan tentang...\", atau pertanyaan-pertanyaan terbuka yang membutuhkan jawaban deskriptif dan penjelasan. Sangat cocok untuk pertanyaan seputar panduan, rekomendasi (non-produk), dan kebijakan internal.\n\nJANGAN gunakan alat ini ketika: Pengguna menanyakan data yang pasti dan kuantitatif. Hindari menggunakan alat ini untuk pertanyaan tentang:\n\nHarga spesifik sebuah mobil.\n\nPerbandingan spesifikasi teknis (seperti cc mesin, tenaga, torsi).\n\nJumlah stok unit di sebuah kota.\n\nInformasi promo atau diskon yang sedang aktif.\n\nDetail aksesoris dan harganya.\n\nUntuk pertanyaan-pertanyaan tersebut, gunakan tool yang terhubung langsung ke database SQL.",
+        "tableName": "knowledge_base_vectors",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        -1008,
+        208
+      ],
+      "id": "345e347c-233c-4c1a-aa67-86f15671b801",
+      "name": "Postgres PGVector Store2"
+    },
+    {
+      "parameters": {
+        "model": "nomic-embed-text:latest"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [
+        -928,
+        368
+      ],
+      "id": "7d116d1a-0f94-4358-80a9-0f8fdab23cf3",
+      "name": "Embeddings Ollama2"
+    },
+    {
+      "parameters": {
+        "endpointUrl": "http://car_service:8007/mcp",
+        "include": "selected",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.1,
+      "position": [
+        -1152,
+        288
+      ],
+      "id": "1a8695d8-e497-4421-8e39-33cd45876ba2",
+      "name": "Car Service1"
     }
   ],
   "pinData": {},
@@ -605,11 +621,6 @@ Aturan tambahan:
         ]
       ]
     },
-    "OpenRouter Chat Model": {
-      "ai_languageModel": [
-        []
-      ]
-    },
     "Ollama Chat Model1": {
       "ai_languageModel": [
         [
@@ -642,16 +653,49 @@ Aturan tambahan:
           }
         ]
       ]
+    },
+    "Embeddings Ollama2": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Postgres PGVector Store2",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Car Service1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres PGVector Store2": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "e0ddb16e-cf38-450a-9bb0-c1782722d1e4",
+  "versionId": "8515fe96-5f8f-4cdf-bd13-7345f44995c8",
   "meta": {
     "instanceId": "558d88703fb65b2d0e44613bc35916258b0f0bf983c5d4730c00c424b77ca36a"
   },
-  "id": "aoqdQQARJ5E5lOeT",
+  "id": "sJfpz9wEICJxZklj",
   "tags": []
 }
