@@ -1,56 +1,75 @@
-<div class="app">
-	<header>
-		<nav>
-			<h1>Chatbot PWA</h1>
-		</nav>
-	</header>
+﻿<script lang="ts">
+  import { onMount } from 'svelte';
 
-	<main>
-		<slot />
-	</main>
-</div>
+  onMount(() => {
+    // Register service worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js').catch(() => {
+        // Silently fail if service worker is not available
+      });
+    }
+  });
+</script>
 
-<style>
-	.app {
-		display: flex;
-		flex-direction: column;
-		min-height: 100vh;
-	}
+<svelte:head>
+  <title>Toyota Chatbot Assistant</title>
+  <meta name="description" content="Asisten virtual Toyota untuk rekomendasi mobil, informasi produk, dan layanan" />
+</svelte:head>
 
-	header {
-		background: #f5f5f5;
-		border-bottom: 1px solid #ddd;
-		padding: 1rem;
-	}
+<slot />
 
-	nav {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		max-width: 1200px;
-		margin: 0 auto;
-	}
+<style global lang="postcss">
+  :global(*) {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 
-	h1 {
-		margin: 0;
-		color: #333;
-	}
+  :global(html, body) {
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-	main {
-		flex: 1;
-		width: 100%;
-		max-width: 1200px;
-		margin: 0 auto;
-		padding: 1rem;
-	}
+  :global(body) {
+    background: #FFFFFF;
+    color: #1a1a1a;
+  }
 
-	:global(body) {
-		margin: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-		background: #fafafa;
-	}
+  :global(button) {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+  }
 
-	:global(*) {
-		box-sizing: border-box;
-	}
+  :global(input, textarea) {
+    font-family: inherit;
+    border: none;
+    outline: none;
+  }
+
+  :global(a) {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  :global(::-webkit-scrollbar) {
+    width: 6px;
+    height: 6px;
+  }
+
+  :global(::-webkit-scrollbar-track) {
+    background: #f1f1f1;
+  }
+
+  :global(::-webkit-scrollbar-thumb) {
+    background: #CC0000;
+    border-radius: 3px;
+  }
+
+  :global(::-webkit-scrollbar-thumb:hover) {
+    background: #B00000;
+  }
 </style>

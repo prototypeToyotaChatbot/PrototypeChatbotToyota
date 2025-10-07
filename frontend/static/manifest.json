@@ -1,11 +1,11 @@
 {
-	"name": "Chatbot PWA",
-	"short_name": "Chatbot",
-	"description": "Simple chatbot Progressive Web App",
+	"name": "Toyota Assistant",
+	"short_name": "Toyota",
+	"description": "Asisten chatbot untuk informasi mobil Toyota",
 	"start_url": "/",
 	"display": "standalone",
 	"background_color": "#ffffff",
-	"theme_color": "#007bff",
+	"theme_color": "#CC0000",
 	"orientation": "portrait-primary",
 	"icons": [
 		{
@@ -26,12 +26,12 @@
 			"purpose": "any maskable"
 		}
 	],
-	"categories": ["productivity", "communication"],
+	"categories": ["productivity", "communication", "automotive"],
 	"shortcuts": [
 		{
-			"name": "New Chat",
+			"name": "Mulai Chat",
 			"short_name": "Chat",
-			"description": "Start a new chat conversation",
+			"description": "Mulai percakapan baru dengan Toyota Assistant",
 			"url": "/",
 			"icons": [
 				{

@@ -869,23 +869,26 @@ def get_welcome_response(session_id: str) -> ChatResponse:
 async def get_fallback_response(message: str, db: Session, session_id: str) -> ChatResponse:
     """Mendapatkan respons fallback dengan informasi dasar"""
     try:
-        # Berikan beberapa informasi berguna berdasarkan kata kunci
+        # Berikan respons fallback dari konfigurasi
+        # dengan informasi tambahan jika relevan
         message_lower = message.lower()
+        
+        response_text = CHATBOT_CONFIG["fallback_message"]
 
+        # Tambahkan data cars jika query tentang mobil
         if any(word in message_lower for word in ["car", "mobil", "model", "available"]):
             cars = db.query(Car).limit(5).all()
-            car_list = [f"- {car.model_name} ({car.segment})" for car in cars]
-            response_text = f"Here are some of our popular car models:\n\n" + "\n".join(car_list)
-        elif any(word in message_lower for word in ["promo", "promotion", "discount"]):
+            if cars:
+                car_list = [f"- {car.model_name} ({car.segment})" for car in cars]
+                response_text += f"\n\nBeberapa model populer kami:\n" + "\n".join(car_list)
+        
+        # Tambahkan info promo jika query tentang promo
+        elif any(word in message_lower for word in ["promo", "promotion", "discount", "diskon"]):
             promotions = db.query(Promotion).filter(
                 Promotion.end_date >= func.current_date()
             ).limit(3).all()
             if promotions:
-                response_text = f"We have {len(promotions)} active promotions! Would you like to see the details?"
-            else:
-                response_text = "We always offer competitive prices! Let me know what car you're looking for."
-        else:
-            response_text = CHATBOT_CONFIG["fallback_message"]
+                response_text += f"\n\nKami memiliki {len(promotions)} promo aktif! Mau lihat detailnya?"
 
         return ChatResponse(
             session_id=session_id,

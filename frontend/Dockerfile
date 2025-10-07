@@ -24,9 +24,14 @@ WORKDIR /app
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/server.js ./server.js
 
 # Expose port
 EXPOSE 3000
 
-# Start the application
-CMD ["node", "build"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+# Start Express server (not SvelteKit node adapter)
+CMD ["node", "server.js"]
